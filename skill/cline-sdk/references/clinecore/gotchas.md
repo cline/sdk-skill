@@ -82,10 +82,30 @@ ClineCore discovers plugins from:
 - Global: `~/.cline/plugins/`
 - Workspace: `.cline/plugins/`
 
+For SDK consumers, pass plugins via `extensions: [plugin]` or `pluginPaths: ["./path"]` in the session config.
+
 If a plugin isn't loading, verify:
-- The file is in one of these directories
-- The file exports the correct plugin structure
-- `extensionLoading` mode matches what the plugin expects
+- The file is in one of the discovery directories, or passed via `extensions`/`pluginPaths`
+- The file exports a default plugin object with a non-empty `manifest.capabilities` array
+- Every `api.register*` call in `setup()` has a matching capability declared
+- If `hooks` is present on the plugin, `"hooks"` is in `capabilities`
+
+## extensionContext.workspace Is Required for Plugins
+
+If your plugins use `ctx.workspaceInfo` (e.g., to resolve workspace paths), you must set `extensionContext.workspace` in the session config. Without it, `ctx.workspaceInfo` is undefined:
+
+```typescript
+await cline.start({
+  config: {
+    extensions: [myPlugin],
+    extensionContext: {
+      workspace: { rootPath: process.cwd(), cwd: process.cwd() },
+    },
+  },
+})
+```
+
+The CLI sets this automatically, but SDK consumers must set it explicitly.
 
 ## send() Requires an Active Session
 

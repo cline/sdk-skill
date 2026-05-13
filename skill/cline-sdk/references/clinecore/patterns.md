@@ -134,6 +134,49 @@ await cline.start({
 })
 ```
 
+## Session with Plugins
+
+Load plugins inline with `extensions` and provide workspace context so plugins can access `ctx.workspaceInfo`:
+
+```typescript
+import { ClineCore } from "@cline/sdk"
+import myPlugin from "./my-plugin"
+
+const cline = await ClineCore.create({
+  clientName: "my-app",
+  backendMode: "local",
+})
+
+await cline.start({
+  prompt: "Do the thing my plugin enables",
+  config: {
+    providerId: "anthropic",
+    modelId: "claude-sonnet-4-6",
+    cwd: process.cwd(),
+    enableTools: true,
+    extensions: [myPlugin],
+    extensionContext: {
+      workspace: { rootPath: process.cwd(), cwd: process.cwd() },
+    },
+  },
+})
+
+await cline.dispose()
+```
+
+For directory-based plugin packages, use `pluginPaths` instead:
+
+```typescript
+config: {
+  pluginPaths: ["./my-cline-plugin"],
+  extensionContext: {
+    workspace: { rootPath: process.cwd(), cwd: process.cwd() },
+  },
+}
+```
+
+See `../plugins/REFERENCE.md` for the full plugin authoring guide.
+
 ## Session Listing and Replay
 
 ```typescript
