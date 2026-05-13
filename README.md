@@ -4,8 +4,6 @@ Cline SDK reference docs for AI coding assistants. Covers the Agent runtime, Cli
 
 ## Install
 
-### AI Coding Assistants
-
 Add the skill to your AI coding assistant for richer context:
 
 ```bash
@@ -14,44 +12,9 @@ npx skills add cline/sdk-skill
 
 This works with Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, Goose, OpenCode, and Windsurf.
 
-### OpenCode (inc /command)
-
-Local installation (current project only):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/cline/sdk-skill/main/install.sh | bash
-```
-
-Global installation (available in all projects):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/cline/sdk-skill/main/install.sh | bash -s -- --global
-```
-
-## Usage
-
-Once installed, the skill appears in OpenCode's `<available_skills>` list. The agent loads it automatically when working on Cline SDK tasks.
-
-Use the `/cline-sdk` command to load the skill and get contextual guidance:
-
-```
-/cline-sdk create an agent with custom tools
-```
-
-### Updating
-
-To update to the latest version:
-
-```
-/cline-sdk --update-skill
-```
-
 ## Structure
 
-The installer adds both a skill and a command:
-
 ```
-# Skill (reference docs)
 skill/cline-sdk/
 +-- SKILL.md                  # Main manifest + decision trees
 +-- references/               # API and concept subdirectories
@@ -64,9 +27,6 @@ skill/cline-sdk/
     +-- production/           # Deployment and security
     +-- scheduling/           # Cron and automation
     +-- multi-agent/          # Teams and sub-agents
-
-# Command (slash command)
-command/cline-sdk.md          # /cline-sdk entrypoint
 ```
 
 ### Decision Trees
