@@ -2,6 +2,8 @@
 
 Cline SDK reference docs for AI coding assistants. Covers the Agent runtime, ClineCore sessions, custom tools, plugins, events, LLM providers, scheduling, multi-agent teams, and production deployment.
 
+For full documentation, visit [docs.cline.bot/sdk](https://docs.cline.bot/sdk).
+
 ## Install
 
 Add the skill to your AI coding assistant for richer context:
@@ -52,14 +54,6 @@ Plugins: Extension system, hooks, lifecycle stages, distribution
 
 Cross-cutting: Events, LLM providers, scheduling, multi-agent teams, production deployment
 
-## Credits and Inspiration
-
-This skill's structure and patterns are inspired by:
-
-- [opentui-skill](https://github.com/msmps/opentui-skill) by [msmps](https://github.com/msmps) -- decision trees, progressive disclosure, and the multi-file reference pattern.
-
-- [cloudflare-skill](https://github.com/dmmulroy/cloudflare-skill) by [Dillon Mulroy](https://github.com/dmmulroy) -- an excellent example of a platform skill.
-
 ## License
 
-Apache 2.0 - see [LICENSE](LICENSE)
+[Apache 2.0 © 2026 Cline Bot Inc.](./LICENSE)
