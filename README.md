@@ -12,7 +12,7 @@ Add the skill to your AI coding assistant for richer context:
 npx skills add cline/sdk-skill
 ```
 
-This works with Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, Goose, OpenCode, and Windsurf.
+This works with Cline CLI, Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, Goose, OpenCode, and Windsurf.
 
 ## Structure
 
