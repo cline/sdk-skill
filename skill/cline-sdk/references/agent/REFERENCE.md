@@ -26,7 +26,7 @@ const agent = new Agent({
 })
 
 const result = await agent.run("What is the capital of France?")
-console.log(result.text)
+console.log(result.outputText)
 ```
 
 ## Core Concepts
@@ -64,15 +64,19 @@ const agent = new Agent({
 })
 
 const first = await agent.run("What is 2 + 2?")
-console.log(first.text)
+console.log(first.outputText)
 
 const second = await agent.continue("Now multiply that by 3")
-console.log(second.text)
+console.log(second.outputText)
 ```
 
 Use `agent.hasRun` to check if a run has already been executed, which determines whether to call `run()` or `continue()`.
 
 ## Event Streaming
+
+Use `agent.subscribe()` to stream events in real time. Register the listener before calling `run()` to avoid missing early events.
+
+There is no top-level `onEvent` field on the Agent config. For an async alternative, use `hooks.onEvent` (see `api.md` and `gotchas.md`).
 
 ```typescript
 const agent = new Agent({
@@ -80,20 +84,15 @@ const agent = new Agent({
   modelId: "claude-sonnet-4-6",
   systemPrompt: "You are a helpful assistant.",
   tools: [],
-  onEvent: (event) => {
-    if (event.type === "content_update" && event.contentType === "text") {
-      process.stdout.write(event.text)
-    }
-  },
 })
-```
 
-Or use `subscribe()`:
-
-```typescript
 agent.subscribe((event) => {
-  // handle events
+  if (event.type === "assistant-text-delta") {
+    process.stdout.write(event.text)
+  }
 })
+
+const result = await agent.run("What is the capital of France?")
 ```
 
 See `events/REFERENCE.md` for the full event type catalog.

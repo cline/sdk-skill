@@ -42,15 +42,40 @@ execute: async (input) => {
 import { Agent } from "@cline/agents"
 ```
 
-## Event Listener Timing
+## No Top-Level onEvent on Agent Config
 
-Register event listeners before calling `run()`:
+`AgentRuntimeConfig` does not have a top-level `onEvent` field. Passing `onEvent` to `new Agent({ onEvent: ... })` has no effect. There are two ways to receive events:
 
 ```typescript
-// Good: listener registered before run
-const agent = new Agent({ ...config, onEvent: handler })
+// Option 1: subscribe() - synchronous, best for UI streaming
+const agent = new Agent({ ...config })
+agent.subscribe((event) => {
+  if (event.type === "assistant-text-delta") {
+    process.stdout.write(event.text)
+  }
+})
 
-// Also good: subscribe before run
+// Option 2: hooks.onEvent - awaited, best for async side effects
+const agent = new Agent({
+  ...config,
+  hooks: {
+    onEvent: async (event) => {
+      if (event.type === "assistant-text-delta") {
+        await logToService(event.text)
+      }
+    },
+  },
+})
+```
+
+Both receive the same `AgentRuntimeEvent` types. Prefer `subscribe()` for streaming UI.
+
+## Event Listener Timing
+
+Register event listeners via `subscribe()` before calling `run()`:
+
+```typescript
+// Good: subscribe before run
 agent.subscribe(handler)
 const result = await agent.run(input)
 

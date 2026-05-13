@@ -29,16 +29,10 @@ const cline = await ClineCore.create({ clientName: "my-app" })
 
 cline.subscribe((event) => {
   switch (event.type) {
-    case "started":
-      ui.showLoading(event.sessionId)
-      break
     case "chunk":
       if (event.payload.type === "text") {
         ui.appendText(event.payload.text)
       }
-      break
-    case "tool":
-      ui.showToolCall(event.payload.toolName, event.payload.status)
       break
     case "ended":
       ui.showComplete(event.payload.finishReason)

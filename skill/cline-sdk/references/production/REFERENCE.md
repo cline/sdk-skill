@@ -11,7 +11,7 @@ const result = await agent.run(input)
 
 switch (result.status) {
   case "completed":
-    console.log("Success:", result.text)
+    console.log("Success:", result.outputText)
     break
   case "aborted":
     console.log("Cancelled:", result.error?.message)
@@ -82,12 +82,9 @@ Use cheaper models for simple tasks:
 Monitor spending in real time:
 
 ```typescript
-let sessionCost = 0
-
 agent.subscribe((event) => {
-  if (event.type === "usage" && event.cost) {
-    sessionCost += event.cost
-    if (sessionCost > MAX_BUDGET) {
+  if (event.type === "usage-updated" && event.usage.totalCost) {
+    if (event.usage.totalCost > MAX_BUDGET) {
       agent.abort("Budget exceeded")
     }
   }

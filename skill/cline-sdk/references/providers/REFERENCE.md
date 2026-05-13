@@ -237,14 +237,14 @@ Track per-request and cumulative costs:
 ```typescript
 // Via events
 agent.subscribe((event) => {
-  if (event.type === "usage") {
-    console.log(`Cost: $${event.cost?.toFixed(4)}`)
+  if (event.type === "usage-updated") {
+    console.log(`Cost: $${event.usage.totalCost?.toFixed(4)}`)
   }
 })
 
 // Via result
 const result = await agent.run("...")
-console.log(`Total cost: $${result.usage.cost?.toFixed(4)}`)
+console.log(`Total cost: $${result.usage.totalCost?.toFixed(4)}`)
 
 // Via ClineCore accumulated usage
 const usage = await cline.getAccumulatedUsage(sessionId)

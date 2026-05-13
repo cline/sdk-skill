@@ -19,6 +19,7 @@ Follow these rules in all Cline SDK code:
 4. Return errors as structured data from tool `execute` functions. Throwing counts as a "mistake" against the agent's mistake limit.
 5. Use `lifecycle: { completesRun: true }` on tools that should end the agent loop (e.g. a "submit answer" tool).
 6. When using `ClineCore`, always call `dispose()` when done to clean up resources.
+7. The standalone `Agent` and `ClineCore` have different event systems. For `Agent`: use `agent.subscribe()` to get `AgentRuntimeEvent` types (text streaming is `"assistant-text-delta"`, result text is `result.outputText`). For `ClineCore`: use `cline.subscribe()` to get `CoreSessionEvent` types (text streaming is `"chunk"` with `payload.type === "text"`, result text is `result.text`). There is no top-level `onEvent` field on `AgentRuntimeConfig` -- use `agent.subscribe()` or `hooks.onEvent` instead. Do not use event types like `"content_update"` or `"content_start"` with `agent.subscribe()` -- those are internal legacy types from the ClineCore adapter layer.
 
 ## How to Use This Skill
 

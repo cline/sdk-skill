@@ -68,10 +68,12 @@ ClineCore watches `.cline/` directories for:
 
 | Mode | Description |
 |------|-------------|
-| `"auto"` | Prefers local hub, falls back to in-process |
-| `"local"` | In-process execution, local storage only |
-| `"hub"` | Requires compatible WebSocket hub |
-| `"remote"` | Requires explicit remote hub endpoint |
+| `"auto"` (default) | Tries to connect to a local hub; falls back to in-process if unavailable |
+| `"local"` | In-process execution, local SQLite storage, no hub |
+| `"hub"` | Requires a compatible local WebSocket hub; fails if unavailable |
+| `"remote"` | Connects to an explicit remote hub endpoint |
+
+The default mode is `"auto"`. For simple scripts and CLI tools, `"local"` avoids hub discovery overhead. Hub mode enables multi-client session sharing (e.g., a dashboard watching a running session from another process).
 
 ## Key APIs
 
@@ -91,12 +93,11 @@ See `api.md` for full API details.
 
 ## Event Streaming
 
+`cline.subscribe()` emits `CoreSessionEvent` types. These are different from the `AgentRuntimeEvent` types emitted by the standalone `Agent` class -- see `../events/REFERENCE.md` for the full comparison.
+
 ```typescript
 cline.subscribe((event) => {
   switch (event.type) {
-    case "started":
-      console.log(`Session ${event.sessionId} started`)
-      break
     case "chunk":
       if (event.payload.type === "text") {
         process.stdout.write(event.payload.text)
@@ -108,6 +109,8 @@ cline.subscribe((event) => {
   }
 })
 ```
+
+ClineCore results use `AgentResult` with `.text` (not `.outputText` like the standalone Agent's `AgentRunResult`).
 
 ## Session Persistence
 
