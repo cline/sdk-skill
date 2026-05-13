@@ -8,71 +8,64 @@ There are three event layers, each at a different abstraction level:
 
 | Layer | Type | Source |
 |-------|------|--------|
-| Agent Runtime | `AgentRuntimeEvent` | `agent.subscribe()` or `onEvent` callback |
+| Agent Runtime | `AgentRuntimeEvent` | `agent.subscribe()` |
 | ClineCore Session | `CoreSessionEvent` | `cline.subscribe()` |
 | Plugin Hooks | Hook callbacks | Plugin `hooks` object |
 
 ## Agent Runtime Events (AgentRuntimeEvent)
 
-Low-level events from the browser-compatible agent loop.
+Events from the agent loop, emitted via `agent.subscribe()`. Every event includes a `snapshot` field with the current `AgentRuntimeStateSnapshot`.
+
+### Run Lifecycle Events
+
+```typescript
+// Run started
+{ type: "run-started", snapshot }
+
+// Run completed
+{ type: "run-finished", snapshot, result: AgentRunResult }
+```
+
+### Turn Events
+
+```typescript
+// A turn (iteration) started
+{ type: "turn-started", snapshot, iteration: number }
+
+// A turn finished
+{ type: "turn-finished", snapshot, iteration: number, toolCallCount: number }
+```
 
 ### Content Events
 
 ```typescript
-// Text or tool content started
-{ type: "content_start", contentType: "text" | "tool", toolName?: string }
+// Streaming text delta from the assistant
+{ type: "assistant-text-delta", snapshot, iteration: number, text: string, accumulatedText: string }
 
-// Text delta or tool input delta
-{ type: "content_update", contentType: "text", text: string }
-{ type: "content_update", contentType: "tool", toolName: string, input: string }
+// Complete assistant message received
+{ type: "assistant-message", snapshot, iteration: number, message: AgentMessage, finishReason: string }
 
-// Content block finished
-{ type: "content_end", contentType: "text" | "tool" }
-```
-
-### Iteration Events
-
-```typescript
-// Agent loop iteration started/ended
-{ type: "iteration_start", iteration: number }
-{ type: "iteration_end", iteration: number }
+// A message (user or assistant) was added to the conversation
+{ type: "message-added", snapshot, message: AgentMessage }
 ```
 
 ### Usage Events
 
 ```typescript
 {
-  type: "usage",
-  inputTokens: number,
-  outputTokens: number,
-  cacheReadTokens?: number,
-  cacheWriteTokens?: number,
-  cost?: number,
-  // Cumulative totals for the session:
-  totalInputTokens: number,
-  totalOutputTokens: number,
+  type: "usage-updated",
+  snapshot,
+  usage: {
+    inputTokens: number,
+    outputTokens: number,
+    cacheReadTokens?: number,
+    cacheWriteTokens?: number,
+    totalCost?: number,
+  },
 }
 ```
 
-### Notice Events
-
-```typescript
-{ type: "notice", message: string }
-```
-
-### Completion Events
-
-```typescript
-{
-  type: "done",
-  status: "completed" | "aborted" | "failed",
-  reason?: string,
-}
-
-{ type: "error", error: Error }
-```
-
-### Done Status Values
+### Run Result Status Values
 
 | Status | Meaning |
 |--------|---------|
@@ -82,35 +75,19 @@ Low-level events from the browser-compatible agent loop.
 
 ## Subscribing to Agent Events
 
-### Via Constructor
-
-```typescript
-const agent = new Agent({
-  ...config,
-  onEvent: (event) => {
-    if (event.type === "content_update" && event.contentType === "text") {
-      process.stdout.write(event.text)
-    }
-  },
-})
-```
-
-### Via subscribe()
+Use `agent.subscribe()` to listen for streaming events. Register the listener before calling `run()` to avoid missing early events.
 
 ```typescript
 const unsubscribe = agent.subscribe((event) => {
   switch (event.type) {
-    case "content_start":
-      if (event.contentType === "tool") console.log(`\n[${event.toolName}]`)
+    case "assistant-text-delta":
+      process.stdout.write(event.text)
       break
-    case "content_update":
-      if (event.contentType === "text") process.stdout.write(event.text)
+    case "usage-updated":
+      console.log(`tokens: ${event.usage.inputTokens} in, ${event.usage.outputTokens} out`)
       break
-    case "usage":
-      console.log(`tokens: ${event.inputTokens} in, ${event.outputTokens} out`)
-      break
-    case "done":
-      console.log(`\nFinished: ${event.status}`)
+    case "run-finished":
+      console.log(`\nFinished: ${event.result.status}`)
       break
   }
 })
@@ -197,7 +174,7 @@ cline.subscribe(handler, { sessionId: "specific-session-id" })
 
 ```typescript
 agent.subscribe((event) => {
-  if (event.type === "content_update" && event.contentType === "text") {
+  if (event.type === "assistant-text-delta") {
     process.stdout.write(event.text)
   }
 })
@@ -206,12 +183,9 @@ agent.subscribe((event) => {
 ### Usage Tracking
 
 ```typescript
-let totalCost = 0
-
 agent.subscribe((event) => {
-  if (event.type === "usage" && event.cost) {
-    totalCost += event.cost
-    console.log(`Running cost: $${totalCost.toFixed(4)}`)
+  if (event.type === "usage-updated" && event.usage.totalCost) {
+    console.log(`Running cost: $${event.usage.totalCost.toFixed(4)}`)
   }
 })
 ```
@@ -220,11 +194,8 @@ agent.subscribe((event) => {
 
 ```typescript
 agent.subscribe((event) => {
-  if (event.type === "content_start" && event.contentType === "tool") {
-    console.log(`Tool started: ${event.toolName}`)
-  }
-  if (event.type === "content_end" && event.contentType === "tool") {
-    console.log(`Tool finished`)
+  if (event.type === "turn-finished" && event.toolCallCount > 0) {
+    console.log(`Turn ${event.iteration} made ${event.toolCallCount} tool calls`)
   }
 })
 ```

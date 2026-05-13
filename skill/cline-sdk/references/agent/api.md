@@ -181,7 +181,7 @@ interface AgentUsage {
   cacheWriteTokens: number
   totalInputTokens: number
   totalOutputTokens: number
-  cost?: number
+  totalCost?: number
 }
 ```
 

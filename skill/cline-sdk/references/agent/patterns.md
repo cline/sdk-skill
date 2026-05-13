@@ -25,13 +25,13 @@ async function handleMessage(threadId: string, message: string) {
     ? await agent.continue(message)
     : await agent.run(message)
 
-  return result.text
+  return result.outputText
 }
 ```
 
 ## Streaming UI
 
-Build a real-time UI by handling events:
+Build a real-time UI by handling events via `subscribe()`:
 
 ```typescript
 const agent = new Agent({
@@ -39,24 +39,26 @@ const agent = new Agent({
   modelId: "claude-sonnet-4-6",
   systemPrompt: "You are a helpful assistant.",
   tools: [myTool],
-  onEvent: (event) => {
-    switch (event.type) {
-      case "content_start":
-        if (event.contentType === "text") ui.startText()
-        if (event.contentType === "tool") ui.startTool(event.toolName)
-        break
-      case "content_update":
-        if (event.contentType === "text") ui.appendText(event.text)
-        break
-      case "content_end":
-        if (event.contentType === "text") ui.endText()
-        if (event.contentType === "tool") ui.endTool()
-        break
-      case "usage":
-        ui.updateUsage(event.inputTokens, event.outputTokens)
-        break
-    }
-  },
+})
+
+agent.subscribe((event) => {
+  switch (event.type) {
+    case "assistant-text-delta":
+      ui.appendText(event.text)
+      break
+    case "assistant-message":
+      ui.endText()
+      break
+    case "turn-started":
+      ui.startTurn(event.iteration)
+      break
+    case "turn-finished":
+      if (event.toolCallCount > 0) ui.showToolCount(event.toolCallCount)
+      break
+    case "usage-updated":
+      ui.updateUsage(event.usage.inputTokens, event.usage.outputTokens)
+      break
+  }
 })
 ```
 
@@ -114,7 +116,7 @@ try {
   if (result.status === "aborted") {
     console.log("Agent was aborted")
   } else {
-    console.log(result.text)
+    console.log(result.outputText)
   }
 } finally {
   clearTimeout(timeout)

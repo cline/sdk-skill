@@ -98,7 +98,7 @@ If a plugin isn't loading, verify:
 ```typescript
 const session = await cline.start({ ... })
 if (session.result) {
-  console.log(session.result.text)
+  console.log(session.result.outputText)
 } else {
   console.log("Session started but not yet complete")
 }

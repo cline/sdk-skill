@@ -44,13 +44,10 @@ import { Agent } from "@cline/agents"
 
 ## Event Listener Timing
 
-Register event listeners before calling `run()`:
+Register event listeners via `subscribe()` before calling `run()`:
 
 ```typescript
-// Good: listener registered before run
-const agent = new Agent({ ...config, onEvent: handler })
-
-// Also good: subscribe before run
+// Good: subscribe before run
 agent.subscribe(handler)
 const result = await agent.run(input)
 
