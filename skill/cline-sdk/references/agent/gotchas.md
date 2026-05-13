@@ -42,6 +42,28 @@ execute: async (input) => {
 import { Agent } from "@cline/agents"
 ```
 
+## onEvent Config Does Not Stream Events
+
+The `onEvent` callback in `AgentRuntimeConfig` exists on the type but does not emit streaming events like `assistant-text-delta`. Use `agent.subscribe()` instead:
+
+```typescript
+// Does NOT work for streaming:
+const agent = new Agent({
+  ...config,
+  onEvent: (event) => {
+    // This callback will not fire for streaming events
+  },
+})
+
+// Works:
+const agent = new Agent({ ...config })
+agent.subscribe((event) => {
+  if (event.type === "assistant-text-delta") {
+    process.stdout.write(event.text)
+  }
+})
+```
+
 ## Event Listener Timing
 
 Register event listeners via `subscribe()` before calling `run()`:

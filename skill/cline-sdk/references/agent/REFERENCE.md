@@ -74,7 +74,9 @@ Use `agent.hasRun` to check if a run has already been executed, which determines
 
 ## Event Streaming
 
-Use `agent.subscribe()` to stream events in real time. Register listeners before calling `run()`.
+Use `agent.subscribe()` to stream events in real time. Register the listener before calling `run()` to avoid missing early events.
+
+Do not use the `onEvent` constructor option for streaming -- it does not emit streaming events. See `gotchas.md` for details.
 
 ```typescript
 const agent = new Agent({
@@ -89,6 +91,8 @@ agent.subscribe((event) => {
     process.stdout.write(event.text)
   }
 })
+
+const result = await agent.run("What is the capital of France?")
 ```
 
 See `events/REFERENCE.md` for the full event type catalog.

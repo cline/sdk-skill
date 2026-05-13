@@ -1,5 +1,56 @@
 # Agent Patterns
 
+## Interactive CLI Agent
+
+A multi-turn conversational agent in the terminal with streaming output:
+
+```typescript
+import { Agent } from "@cline/sdk"
+import * as readline from "node:readline"
+
+const agent = new Agent({
+  providerId: "anthropic",
+  modelId: "claude-sonnet-4-6",
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  systemPrompt: "You are a helpful assistant. Keep responses concise.",
+  tools: [],
+})
+
+agent.subscribe((event) => {
+  if (event.type === "assistant-text-delta") {
+    process.stdout.write(event.text)
+  }
+})
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+})
+
+function prompt(): void {
+  rl.question("\nYou: ", async (input) => {
+    const trimmed = input.trim()
+    if (!trimmed || trimmed === "exit") {
+      rl.close()
+      return
+    }
+
+    process.stdout.write("\nAssistant: ")
+
+    if (agent.hasRun) {
+      await agent.continue(trimmed)
+    } else {
+      await agent.run(trimmed)
+    }
+
+    process.stdout.write("\n")
+    prompt()
+  })
+}
+
+prompt()
+```
+
 ## Conversational Agent (Slack Bot, Chat App)
 
 Maintain per-thread agents with conversation memory:
@@ -60,6 +111,8 @@ agent.subscribe((event) => {
       break
   }
 })
+
+const result = await agent.run("Hello!")
 ```
 
 ## Structured Output via Completion Tool

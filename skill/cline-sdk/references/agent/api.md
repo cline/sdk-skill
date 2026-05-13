@@ -37,6 +37,8 @@ interface AgentRuntimeConfigWithProvider {
   hooks?: Partial<AgentRuntimeHooks>
   plugins?: AgentPlugin[]
 
+  // Exists on the type but does not emit streaming events.
+  // Use agent.subscribe() instead for real-time event streaming.
   onEvent?: (event: AgentRuntimeEvent) => void
 }
 ```
@@ -54,6 +56,8 @@ interface AgentRuntimeConfigWithModel {
   hooks?: Partial<AgentRuntimeHooks>
   plugins?: AgentPlugin[]
 
+  // Exists on the type but does not emit streaming events.
+  // Use agent.subscribe() instead for real-time event streaming.
   onEvent?: (event: AgentRuntimeEvent) => void
 }
 ```
