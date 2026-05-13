@@ -76,7 +76,7 @@ Use `agent.hasRun` to check if a run has already been executed, which determines
 
 Use `agent.subscribe()` to stream events in real time. Register the listener before calling `run()` to avoid missing early events.
 
-Do not use the `onEvent` constructor option for streaming -- it does not emit streaming events. See `gotchas.md` for details.
+There is no top-level `onEvent` field on the Agent config. For an async alternative, use `hooks.onEvent` (see `api.md` and `gotchas.md`).
 
 ```typescript
 const agent = new Agent({

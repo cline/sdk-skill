@@ -86,7 +86,7 @@ hooks: {
   afterModel?(context): AgentStopControl | undefined
   beforeTool?(context): AgentBeforeToolResult | undefined
   afterTool?(context): AgentAfterToolResult | undefined
-  onEvent?(event: AgentRuntimeEvent): void
+  onEvent?(event: AgentRuntimeEvent): void | Promise<void>
 }
 ```
 

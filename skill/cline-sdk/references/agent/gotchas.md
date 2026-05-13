@@ -42,27 +42,33 @@ execute: async (input) => {
 import { Agent } from "@cline/agents"
 ```
 
-## onEvent Config Does Not Stream Events
+## No Top-Level onEvent on Agent Config
 
-The `onEvent` callback in `AgentRuntimeConfig` exists on the type but does not emit streaming events like `assistant-text-delta`. Use `agent.subscribe()` instead:
+`AgentRuntimeConfig` does not have a top-level `onEvent` field. Passing `onEvent` to `new Agent({ onEvent: ... })` has no effect. There are two ways to receive events:
 
 ```typescript
-// Does NOT work for streaming:
-const agent = new Agent({
-  ...config,
-  onEvent: (event) => {
-    // This callback will not fire for streaming events
-  },
-})
-
-// Works:
+// Option 1: subscribe() - synchronous, best for UI streaming
 const agent = new Agent({ ...config })
 agent.subscribe((event) => {
   if (event.type === "assistant-text-delta") {
     process.stdout.write(event.text)
   }
 })
+
+// Option 2: hooks.onEvent - awaited, best for async side effects
+const agent = new Agent({
+  ...config,
+  hooks: {
+    onEvent: async (event) => {
+      if (event.type === "assistant-text-delta") {
+        await logToService(event.text)
+      }
+    },
+  },
+})
 ```
+
+Both receive the same `AgentRuntimeEvent` types. Prefer `subscribe()` for streaming UI.
 
 ## Event Listener Timing
 

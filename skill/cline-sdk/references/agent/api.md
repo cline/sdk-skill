@@ -36,10 +36,6 @@ interface AgentRuntimeConfigWithProvider {
   toolPolicies?: Record<string, ToolPolicy>
   hooks?: Partial<AgentRuntimeHooks>
   plugins?: AgentPlugin[]
-
-  // Exists on the type but does not emit streaming events.
-  // Use agent.subscribe() instead for real-time event streaming.
-  onEvent?: (event: AgentRuntimeEvent) => void
 }
 ```
 
@@ -55,12 +51,10 @@ interface AgentRuntimeConfigWithModel {
   toolPolicies?: Record<string, ToolPolicy>
   hooks?: Partial<AgentRuntimeHooks>
   plugins?: AgentPlugin[]
-
-  // Exists on the type but does not emit streaming events.
-  // Use agent.subscribe() instead for real-time event streaming.
-  onEvent?: (event: AgentRuntimeEvent) => void
 }
 ```
+
+Note: there is no top-level `onEvent` field on `AgentRuntimeConfig`. For event streaming, use `agent.subscribe()` or `hooks.onEvent` (see AgentRuntimeHooks below).
 
 ## Methods
 
@@ -199,11 +193,13 @@ interface AgentRuntimeHooks {
   afterModel?(context): AgentStopControl | undefined
   beforeTool?(context): AgentBeforeToolResult | undefined
   afterTool?(context): AgentAfterToolResult | undefined
-  onEvent?(event: AgentRuntimeEvent): void
+  onEvent?(event: AgentRuntimeEvent): void | Promise<void>
 }
 ```
 
 Hooks can intercept and modify behavior at each stage. Return a stop control from `beforeRun`, `afterModel`, or `beforeTool` to halt the agent loop.
+
+`hooks.onEvent` receives the same `AgentRuntimeEvent` types as `agent.subscribe()`, but hook callbacks are awaited (can be async), while `subscribe()` listeners are called synchronously. Use `subscribe()` for UI streaming and `hooks.onEvent` for async side effects like logging to an external service.
 
 ## AgentRuntimeStateSnapshot
 

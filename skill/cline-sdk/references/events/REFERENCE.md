@@ -1,55 +1,64 @@
 # Events
 
-The Cline SDK emits real-time events during agent execution. Events are used for streaming UI, usage tracking, and observability.
+The Cline SDK has three event layers. Which one you use depends on whether you're working with the standalone `Agent` class or `ClineCore`.
 
-## Event Sources
+## Which Events Do I Get?
 
-There are three event layers, each at a different abstraction level:
+| If you use... | You subscribe with... | You receive... | Text streaming event |
+|---|---|---|---|
+| Standalone `Agent` | `agent.subscribe()` | `AgentRuntimeEvent` | `assistant-text-delta` |
+| `ClineCore` | `cline.subscribe()` | `CoreSessionEvent` | `chunk` (with `payload.type === "text"`) |
 
-| Layer | Type | Source |
-|-------|------|--------|
-| Agent Runtime | `AgentRuntimeEvent` | `agent.subscribe()` |
-| ClineCore Session | `CoreSessionEvent` | `cline.subscribe()` |
-| Plugin Hooks | Hook callbacks | Plugin `hooks` object |
+These are different event types with different shapes. Do not mix them up.
 
-## Agent Runtime Events (AgentRuntimeEvent)
+## Layer 1: AgentRuntimeEvent (Standalone Agent)
 
-Events from the agent loop, emitted via `agent.subscribe()`. Every event includes a `snapshot` field with the current `AgentRuntimeStateSnapshot`.
+Emitted by the `Agent` class via `agent.subscribe()`. This is what you get when using `new Agent(...)` directly. Every event includes a `snapshot` field with the current `AgentRuntimeStateSnapshot`.
 
-### Run Lifecycle Events
+### Run Lifecycle
 
 ```typescript
-// Run started
 { type: "run-started", snapshot }
-
-// Run completed
 { type: "run-finished", snapshot, result: AgentRunResult }
+{ type: "run-failed", snapshot, error: Error }
 ```
 
-### Turn Events
+### Turns
 
 ```typescript
-// A turn (iteration) started
 { type: "turn-started", snapshot, iteration: number }
-
-// A turn finished
 { type: "turn-finished", snapshot, iteration: number, toolCallCount: number }
 ```
 
-### Content Events
+### Text Streaming
 
 ```typescript
-// Streaming text delta from the assistant
+// Streaming text delta (arrives as chunks during generation)
 { type: "assistant-text-delta", snapshot, iteration: number, text: string, accumulatedText: string }
 
-// Complete assistant message received
-{ type: "assistant-message", snapshot, iteration: number, message: AgentMessage, finishReason: string }
+// Streaming reasoning delta (when model uses extended thinking)
+{ type: "assistant-reasoning-delta", snapshot, iteration: number, text: string }
 
-// A message (user or assistant) was added to the conversation
+// Complete assistant message after model finishes
+{ type: "assistant-message", snapshot, iteration: number, message: AgentMessage, finishReason: string }
+```
+
+### Messages
+
+```typescript
+// Fired when any message (user or assistant) is added to conversation history
 { type: "message-added", snapshot, message: AgentMessage }
 ```
 
-### Usage Events
+### Tool Events
+
+```typescript
+{ type: "tool-started", snapshot, toolCall: { toolName: string, toolCallId: string, input: unknown } }
+{ type: "tool-updated", snapshot, toolCall: { toolName: string, toolCallId: string }, update: string }
+{ type: "tool-finished", snapshot, toolCall: { toolName: string, toolCallId: string }, message: AgentMessage }
+```
+
+### Usage
 
 ```typescript
 {
@@ -65,45 +74,90 @@ Events from the agent loop, emitted via `agent.subscribe()`. Every event include
 }
 ```
 
-### Run Result Status Values
-
-| Status | Meaning |
-|--------|---------|
-| `"completed"` | Agent finished normally |
-| `"aborted"` | Cancelled via `abort()` |
-| `"failed"` | Unrecoverable error |
-
-## Subscribing to Agent Events
-
-Use `agent.subscribe()` to listen for streaming events. Register the listener before calling `run()` to avoid missing early events.
+### Notices
 
 ```typescript
-const unsubscribe = agent.subscribe((event) => {
+{ type: "status-notice", snapshot, message: string, metadata?: Record<string, unknown> }
+```
+
+### Subscribing
+
+Use `agent.subscribe()`. Register the listener before calling `run()` to avoid missing early events.
+
+```typescript
+const agent = new Agent({
+  providerId: "anthropic",
+  modelId: "claude-sonnet-4-6",
+  apiKey: process.env.ANTHROPIC_API_KEY,
+  systemPrompt: "You are a helpful assistant.",
+  tools: [],
+})
+
+agent.subscribe((event) => {
   switch (event.type) {
     case "assistant-text-delta":
       process.stdout.write(event.text)
       break
+    case "tool-started":
+      console.log(`\nUsing tool: ${event.toolCall.toolName}`)
+      break
     case "usage-updated":
-      console.log(`tokens: ${event.usage.inputTokens} in, ${event.usage.outputTokens} out`)
+      console.log(`Cost: $${event.usage.totalCost?.toFixed(4)}`)
       break
     case "run-finished":
-      console.log(`\nFinished: ${event.result.status}`)
+      console.log(`\nDone: ${event.result.status}`)
       break
   }
 })
+
+const result = await agent.run("Hello!")
 ```
 
-## ClineCore Session Events (CoreSessionEvent)
+You can also receive events through hooks (these are awaited, so they can be async):
 
-Higher-level events from ClineCore's session orchestration:
+```typescript
+const agent = new Agent({
+  ...config,
+  hooks: {
+    onEvent: async (event) => {
+      // Same AgentRuntimeEvent types as subscribe()
+    },
+  },
+})
+```
+
+## Layer 2: AgentEvent (ClineCore Internal)
+
+When using `ClineCore`, a `RuntimeEventAdapter` translates Layer 1 events into a legacy format called `AgentEvent`. You do not interact with this layer directly -- it is projected into `CoreSessionEvent` for subscribers. The key mappings:
+
+| AgentRuntimeEvent (Layer 1) | AgentEvent (Layer 2) |
+|---|---|
+| `turn-started` | `iteration_start` |
+| `turn-finished` | `iteration_end` |
+| `assistant-text-delta` | `content_start` (text) |
+| `assistant-message` | `content_end` (text) |
+| `tool-started` | `content_start` (tool) |
+| `tool-updated` | `content_update` (tool) |
+| `tool-finished` | `content_end` (tool) |
+| `usage-updated` | `usage` (with computed deltas) |
+| `run-finished` | `done` |
+| `run-failed` | `error` |
+| `run-started`, `message-added` | (suppressed, not emitted) |
+
+This layer exists for backwards compatibility. If you see event types like `content_update` or `iteration_start` in other documentation, they refer to this layer, not to what `agent.subscribe()` emits.
+
+## Layer 3: CoreSessionEvent (ClineCore Subscriber)
+
+Emitted by `ClineCore` via `cline.subscribe()`. These are higher-level session events.
 
 ```typescript
 type CoreSessionEvent =
-  | { type: "started"; sessionId: string }
   | { type: "chunk"; payload: SessionChunkEvent }
-  | { type: "tool"; payload: SessionToolEvent }
+  | { type: "agent_event"; payload: { sessionId: string, event: AgentEvent } }
   | { type: "ended"; payload: SessionEndedEvent }
   | { type: "team_progress"; payload: SessionTeamProgressEvent }
+  | { type: "status"; payload: { sessionId: string, status: string } }
+  | { type: "hook"; payload: SessionToolEvent }
 ```
 
 ### SessionChunkEvent
@@ -112,18 +166,6 @@ type CoreSessionEvent =
 interface SessionChunkEvent {
   type: "text" | "reasoning"
   text: string
-  sessionId: string
-}
-```
-
-### SessionToolEvent
-
-```typescript
-interface SessionToolEvent {
-  toolName: string
-  status: "started" | "completed" | "failed"
-  input?: unknown
-  output?: unknown
   sessionId: string
 }
 ```
@@ -138,25 +180,18 @@ interface SessionEndedEvent {
 }
 ```
 
-### Subscribing to ClineCore Events
+### Subscribing
 
 ```typescript
 cline.subscribe((event) => {
   switch (event.type) {
-    case "started":
-      console.log(`Session started: ${event.sessionId}`)
-      break
     case "chunk":
-      process.stdout.write(event.payload.text)
-      break
-    case "tool":
-      console.log(`Tool ${event.payload.toolName}: ${event.payload.status}`)
+      if (event.payload.type === "text") {
+        process.stdout.write(event.payload.text)
+      }
       break
     case "ended":
       console.log(`Finished: ${event.payload.finishReason}`)
-      break
-    case "team_progress":
-      console.log(`Teammate update: ${event.payload}`)
       break
   }
 })
@@ -168,9 +203,22 @@ Filter by session:
 cline.subscribe(handler, { sessionId: "specific-session-id" })
 ```
 
+## Hub Events (Layer 3b)
+
+When ClineCore runs in hub mode (via `backendMode: "hub"` or `"auto"` when a hub is available), events are projected over WebSocket using `HubEventName` types like `assistant.delta`, `iteration.started`, `tool.started`, etc. You do not interact with these directly -- `cline.subscribe()` still gives you `CoreSessionEvent` regardless of backend mode.
+
+## Result Type Differences
+
+The standalone Agent and ClineCore return different result types:
+
+| API | Result type | Text property |
+|---|---|---|
+| `agent.run()` | `AgentRunResult` | `result.outputText` |
+| `cline.start()` / `cline.send()` | `AgentResult` | `result.text` |
+
 ## Common Patterns
 
-### Streaming Text to Console
+### Streaming Text (Standalone Agent)
 
 ```typescript
 agent.subscribe((event) => {
@@ -180,7 +228,17 @@ agent.subscribe((event) => {
 })
 ```
 
-### Usage Tracking
+### Streaming Text (ClineCore)
+
+```typescript
+cline.subscribe((event) => {
+  if (event.type === "chunk" && event.payload.type === "text") {
+    process.stdout.write(event.payload.text)
+  }
+})
+```
+
+### Usage Tracking (Standalone Agent)
 
 ```typescript
 agent.subscribe((event) => {
@@ -190,12 +248,15 @@ agent.subscribe((event) => {
 })
 ```
 
-### Tool Call Logging
+### Tool Call Logging (Standalone Agent)
 
 ```typescript
 agent.subscribe((event) => {
-  if (event.type === "turn-finished" && event.toolCallCount > 0) {
-    console.log(`Turn ${event.iteration} made ${event.toolCallCount} tool calls`)
+  if (event.type === "tool-started") {
+    console.log(`Tool started: ${event.toolCall.toolName}`)
+  }
+  if (event.type === "tool-finished") {
+    console.log(`Tool finished: ${event.toolCall.toolName}`)
   }
 })
 ```

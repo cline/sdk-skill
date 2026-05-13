@@ -123,11 +123,12 @@ const unsubscribe = cline.subscribe(
 
 ```typescript
 type CoreSessionEvent =
-  | { type: "started"; sessionId: string; ... }
   | { type: "chunk"; payload: SessionChunkEvent }
-  | { type: "tool"; payload: SessionToolEvent }
+  | { type: "agent_event"; payload: { sessionId: string, event: AgentEvent } }
   | { type: "ended"; payload: SessionEndedEvent }
   | { type: "team_progress"; payload: SessionTeamProgressEvent }
+  | { type: "status"; payload: { sessionId: string, status: string } }
+  | { type: "hook"; payload: SessionToolEvent }
 ```
 
 ## Session Management
