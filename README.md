@@ -14,6 +14,55 @@ npx skills add cline/sdk-skill
 
 This works with Cline CLI, Claude Code, Codex, Cursor, Gemini CLI, GitHub Copilot, Goose, OpenCode, and Windsurf.
 
+<details>
+<summary>Manual install with git</summary>
+
+If you prefer not to use `npx skills`, you can clone the repo and symlink the skill directory into your agent's skill folder.
+
+For Claude Code:
+
+```bash
+git clone https://github.com/cline/sdk-skill ~/sdk-skill
+mkdir -p ~/.claude/skills
+ln -s ~/sdk-skill/skill/cline-sdk ~/.claude/skills/cline-sdk
+```
+
+For Codex CLI:
+
+```bash
+git clone https://github.com/cline/sdk-skill ~/sdk-skill
+mkdir -p ~/.codex/skills
+ln -s ~/sdk-skill/skill/cline-sdk ~/.codex/skills/cline-sdk
+```
+
+For Amp:
+
+```bash
+git clone https://github.com/cline/sdk-skill ~/sdk-skill
+mkdir -p ~/.config/amp/tools
+ln -s ~/sdk-skill/skill/cline-sdk ~/.config/amp/tools/cline-sdk
+```
+
+For Droid (Factory):
+
+```bash
+git clone https://github.com/cline/sdk-skill ~/sdk-skill
+mkdir -p ~/.factory/skills
+ln -s ~/sdk-skill/skill/cline-sdk ~/.factory/skills/cline-sdk
+```
+
+For pi-coding-agent:
+
+```bash
+git clone https://github.com/cline/sdk-skill ~/sdk-skill
+mkdir -p ~/.pi/agent/skills
+ln -s ~/sdk-skill/skill/cline-sdk ~/.pi/agent/skills/cline-sdk
+```
+
+You can also use project-level paths instead of user-level paths for per-project installation.
+
+</details>
+
 ## Structure
 
 ```
