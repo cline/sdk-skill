@@ -67,8 +67,8 @@ Emitted by the `Agent` class via `agent.subscribe()`. This is what you get when 
   usage: {
     inputTokens: number,
     outputTokens: number,
-    cacheReadTokens?: number,
-    cacheWriteTokens?: number,
+    cacheReadTokens: number,
+    cacheWriteTokens: number,
     totalCost?: number,
   },
 }
@@ -153,9 +153,12 @@ Emitted by `ClineCore` via `cline.subscribe()`. These are higher-level session e
 ```typescript
 type CoreSessionEvent =
   | { type: "chunk"; payload: SessionChunkEvent }
-  | { type: "agent_event"; payload: { sessionId: string, event: AgentEvent } }
+  | { type: "agent_event"; payload: { sessionId: string, event: AgentEvent, teamAgentId?: string, teamRole?: "lead" | "teammate" } }
   | { type: "ended"; payload: SessionEndedEvent }
   | { type: "team_progress"; payload: SessionTeamProgressEvent }
+  | { type: "pending_prompts"; payload: SessionPendingPromptsEvent }
+  | { type: "pending_prompt_submitted"; payload: SessionPendingPromptSubmittedEvent }
+  | { type: "session_snapshot"; payload: SessionSnapshotEvent }
   | { type: "status"; payload: { sessionId: string, status: string } }
   | { type: "hook"; payload: SessionToolEvent }
 ```

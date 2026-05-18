@@ -54,7 +54,7 @@ createTool({
   name: string,                         // snake_case, unique per agent
   description: string,                  // what the tool does (model reads this)
   inputSchema: JSONSchema | ZodSchema,  // input validation
-  execute: async (input, context, onChange?) => output,
+  execute: async (input, context) => output,
   timeoutMs?: number,                   // default: 30000
   retryable?: boolean,                  // default: true
   maxRetries?: number,                  // default: 3
@@ -70,11 +70,16 @@ The second argument to `execute` provides runtime context:
 
 ```typescript
 interface AgentToolContext {
+  sessionId?: string
   agentId: string
-  conversationId: string
+  conversationId?: string
+  runId?: string
   iteration: number
-  abortSignal?: AbortSignal
+  toolCallId?: string
+  signal?: AbortSignal
   metadata?: Record<string, unknown>
+  snapshot?: AgentRuntimeStateSnapshot
+  emitUpdate?: (update: unknown) => void
 }
 ```
 
@@ -115,7 +120,7 @@ execute: async (input) => {
 }
 ```
 
-Thrown exceptions count as "mistakes" against the agent's mistake limit. Returned error data lets the agent adjust its approach.
+Direct `Agent` catches thrown tool errors and turns them into error tool results. ClineCore can also treat repeated failed tool turns as recoverable mistakes. Returned error data is still preferred when the model can adjust its approach.
 
 ## Completion Tools
 
@@ -134,7 +139,7 @@ const submitAnswer = createTool({
 })
 ```
 
-The model sees the tool result and the run ends. Access the output via `result.toolCalls`.
+The model sees the tool result and the run ends. For direct `Agent`, inspect `result.outputText` or the `tool-result` parts in `result.messages`. For ClineCore, `AgentResult.toolCalls` contains structured tool call records.
 
 ## Built-in Tools (ClineCore Only)
 
@@ -148,6 +153,9 @@ When using `ClineCore` with `enableTools: true`, these tools are available autom
 | Patch | `apply_patch` | Apply unified diffs to files |
 | Search | `search_codebase` | Search file contents and directory structure |
 | Web | `fetch_web_content` | Fetch web content via HTTP |
+| Skills | `skills` | Invoke configured skills |
+| Ask | `ask_question` | Ask the user a follow-up question |
+| Submit | `submit_and_exit` | Submit a final answer and end the session |
 
 Built-in tools respect the `cwd` setting in `CoreSessionConfig`.
 
@@ -169,12 +177,10 @@ const agent = new Agent({
 // In ClineCore session
 await cline.start({
   prompt: "...",
-  config: {
-    ...config,
-    toolPolicies: {
-      run_commands: { autoApprove: true },
-      editor: { autoApprove: false },
-    },
+  config: { ... },
+  toolPolicies: {
+    run_commands: { autoApprove: true },
+    editor: { autoApprove: false },
   },
 })
 ```
@@ -198,7 +204,7 @@ Respect the abort signal for tools that take a long time:
 execute: async (input, context) => {
   const results = []
   for (const item of input.items) {
-    if (context.abortSignal?.aborted) {
+    if (context.signal?.aborted) {
       return { results, aborted: true, processed: results.length }
     }
     results.push(await processItem(item))
@@ -209,14 +215,14 @@ execute: async (input, context) => {
 
 ## Streaming Tool Output
 
-Use the `onChange` callback (third argument) to stream partial results:
+Use `context.emitUpdate` to stream partial tool progress. Subscribers receive `tool-updated` events:
 
 ```typescript
-execute: async (input, context, onChange) => {
+execute: async (input, context) => {
   let progress = 0
   for (const step of steps) {
     progress++
-    onChange?.(`Processing step ${progress}/${steps.length}...`)
+    context.emitUpdate?.(`Processing step ${progress}/${steps.length}...`)
     await processStep(step)
   }
   return { completed: true }

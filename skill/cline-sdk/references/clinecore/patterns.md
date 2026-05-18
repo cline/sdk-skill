@@ -14,7 +14,10 @@ const session = await cline.start({
     modelId: "claude-sonnet-4-6",
     apiKey: process.env.ANTHROPIC_API_KEY,
     cwd: process.cwd(),
+    systemPrompt: "You are a helpful coding agent.",
     enableTools: true,
+    enableSpawnAgent: false,
+    enableAgentTeams: false,
   },
 })
 
@@ -50,7 +53,10 @@ await cline.start({
     providerId: "anthropic",
     modelId: "claude-sonnet-4-6",
     cwd: "/path/to/project",
+    systemPrompt: "You are a helpful coding agent.",
     enableTools: true,
+    enableSpawnAgent: false,
+    enableAgentTeams: false,
   },
 })
 ```
@@ -66,7 +72,10 @@ const session = await cline.start({
     providerId: "anthropic",
     modelId: "claude-sonnet-4-6",
     cwd: "/path/to/project",
+    systemPrompt: "You are a helpful coding agent.",
     enableTools: true,
+    enableSpawnAgent: false,
+    enableAgentTeams: false,
   },
 })
 
@@ -132,7 +141,10 @@ await cline.start({
     providerId: "anthropic",
     modelId: "claude-sonnet-4-6",
     cwd: process.cwd(),
+    systemPrompt: "You are a deployment assistant.",
     enableTools: true,
+    enableSpawnAgent: false,
+    enableAgentTeams: false,
     extraTools: [deployTool],
   },
 })
@@ -140,7 +152,7 @@ await cline.start({
 
 ## Session with Plugins
 
-Load plugins inline with `extensions` and provide workspace context so plugins can access `ctx.workspaceInfo`:
+Load plugins inline with `extensions`. Pass `cwd` or `workspaceRoot` so plugins receive accurate `ctx.workspaceInfo`:
 
 ```typescript
 import { ClineCore } from "@cline/sdk"
@@ -157,11 +169,11 @@ await cline.start({
     providerId: "anthropic",
     modelId: "claude-sonnet-4-6",
     cwd: process.cwd(),
+    systemPrompt: "You are a helpful assistant.",
     enableTools: true,
+    enableSpawnAgent: false,
+    enableAgentTeams: false,
     extensions: [myPlugin],
-    extensionContext: {
-      workspace: { rootPath: process.cwd(), cwd: process.cwd() },
-    },
   },
 })
 
@@ -173,9 +185,7 @@ For directory-based plugin packages, use `pluginPaths` instead:
 ```typescript
 config: {
   pluginPaths: ["./my-cline-plugin"],
-  extensionContext: {
-    workspace: { rootPath: process.cwd(), cwd: process.cwd() },
-  },
+  cwd: process.cwd(),
 }
 ```
 
@@ -189,18 +199,19 @@ const cline = await ClineCore.create({ clientName: "my-app" })
 // List recent sessions
 const sessions = await cline.list(10)
 for (const session of sessions) {
-  console.log(`${session.id}: ${session.title}`)
+  console.log(`${session.sessionId}: ${session.metadata?.title ?? ""}`)
 }
 
 // Read messages from a past session
-const messages = await cline.readMessages(sessions[0].id)
+const messages = await cline.readMessages(sessions[0].sessionId)
 for (const msg of messages) {
   console.log(`[${msg.role}] ${msg.content}`)
 }
 
 // Check usage
-const usage = await cline.getAccumulatedUsage(sessions[0].id)
-console.log(`Total tokens: ${usage.aggregateUsage.totalInputTokens + usage.aggregateUsage.totalOutputTokens}`)
+const usage = await cline.getAccumulatedUsage(sessions[0].sessionId)
+const aggregate = usage?.aggregateUsage
+console.log(`Total tokens: ${(aggregate?.inputTokens ?? 0) + (aggregate?.outputTokens ?? 0)}`)
 ```
 
 ## Graceful Shutdown
@@ -235,7 +246,10 @@ async function handleRequest(prompt: string, workspace: string) {
       providerId: "anthropic",
       modelId: "claude-sonnet-4-6",
       cwd: workspace,
+      systemPrompt: "You are a focused worker agent.",
       enableTools: true,
+      enableSpawnAgent: false,
+      enableAgentTeams: false,
     },
   })
 

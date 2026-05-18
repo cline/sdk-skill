@@ -5,16 +5,18 @@
 ```typescript
 import { Agent } from "@cline/sdk"
 
-const agent = new Agent(config: AgentRuntimeConfig)
+const agent = new Agent(config)
 ```
 
-Also available via factory function:
+Also available through the lower-level factory re-export:
 
 ```typescript
-import { createAgent } from "@cline/sdk"
+import { createAgentRuntime } from "@cline/sdk"
 
-const agent = createAgent(config)
+const agent = createAgentRuntime(config)
 ```
+
+`AgentRuntime` and `createAgent` are exported by `@cline/agents` directly, not by `@cline/sdk`. Runtime event and snapshot types are exported by `@cline/agents`; some plugin helper types live in `@cline/shared`.
 
 ## AgentRuntimeConfig
 
@@ -24,18 +26,21 @@ Two config forms exist as a discriminated union:
 
 ```typescript
 interface AgentRuntimeConfigWithProvider {
-  providerId: string          // e.g. "anthropic", "openai", "gemini"
-  modelId: string             // e.g. "claude-sonnet-4-6", "gpt-5.5"
+  providerId: string          // e.g. "anthropic", "openai-native", "gemini"
+  modelId: string             // provider model id
   apiKey?: string             // provider API key
   baseUrl?: string            // custom endpoint
   headers?: Record<string, string>
 
   systemPrompt?: string
+  modelOptions?: Record<string, unknown>
   tools?: AgentTool[]
   initialMessages?: AgentMessage[]
   toolPolicies?: Record<string, ToolPolicy>
   hooks?: Partial<AgentRuntimeHooks>
-  plugins?: AgentPlugin[]
+  plugins?: AgentRuntimePlugin[]       // from @cline/shared, or use structural typing
+  maxIterations?: number
+  toolExecution?: "sequential" | "parallel"
 }
 ```
 
@@ -46,15 +51,20 @@ interface AgentRuntimeConfigWithModel {
   model: AgentModel            // pre-built model from gateway
 
   systemPrompt?: string
+  modelOptions?: Record<string, unknown>
   tools?: AgentTool[]
   initialMessages?: AgentMessage[]
   toolPolicies?: Record<string, ToolPolicy>
   hooks?: Partial<AgentRuntimeHooks>
-  plugins?: AgentPlugin[]
+  plugins?: AgentRuntimePlugin[]       // from @cline/shared, or use structural typing
+  maxIterations?: number
+  toolExecution?: "sequential" | "parallel"
 }
 ```
 
 Note: there is no top-level `onEvent` field on `AgentRuntimeConfig`. For event streaming, use `agent.subscribe()` or `hooks.onEvent` (see AgentRuntimeHooks below).
+
+Direct Agent runtime plugins are not the same as ClineCore `AgentPlugin` extensions. A runtime plugin has `name` and optional `setup(context)` returning `{ tools, hooks }`. Use ClineCore `AgentPlugin` objects only with `config.extensions`.
 
 ## Methods
 
@@ -89,6 +99,8 @@ agent.abort("User cancelled")
 Register a listener for streaming events.
 
 ```typescript
+import type { AgentRuntimeEvent } from "@cline/agents"
+
 const unsubscribe = agent.subscribe((event: AgentRuntimeEvent) => {
   // handle event
 })
@@ -102,6 +114,8 @@ unsubscribe()
 Get the current runtime state including message history.
 
 ```typescript
+import type { AgentRuntimeStateSnapshot } from "@cline/agents"
+
 const state: AgentRuntimeStateSnapshot = agent.snapshot()
 ```
 
@@ -113,17 +127,7 @@ Replace the agent's message history.
 agent.restore(previousMessages)
 ```
 
-### hasRun
-
-Boolean property indicating whether `run()` has been called at least once.
-
-```typescript
-if (agent.hasRun) {
-  await agent.continue(input)
-} else {
-  await agent.run(input)
-}
-```
+There is no `hasRun` property. `run()` and `continue()` both execute against the current in-memory message history. Track first-run state in your app when that distinction matters.
 
 ## AgentRunResult
 
@@ -177,8 +181,6 @@ interface AgentUsage {
   outputTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
-  totalInputTokens: number
-  totalOutputTokens: number
   totalCost?: number
 }
 ```
@@ -205,10 +207,17 @@ Hooks can intercept and modify behavior at each stage. Return a stop control fro
 
 ```typescript
 interface AgentRuntimeStateSnapshot {
+  agentId: string
+  agentRole?: string
+  parentAgentId?: string | null
+  conversationId?: string
+  runId?: string
+  status: "idle" | "running" | "completed" | "aborted" | "failed"
+  iteration: number
   messages: readonly AgentMessage[]
+  pendingToolCalls: readonly string[]
   usage: AgentUsage
-  iterations: number
-  status: string
+  lastError?: string
 }
 ```
 

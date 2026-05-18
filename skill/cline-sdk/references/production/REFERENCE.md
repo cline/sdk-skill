@@ -56,7 +56,7 @@ Set maximum tokens per turn and iteration limits:
 const agent = new Agent({
   providerId: "anthropic",
   modelId: "claude-sonnet-4-6",
-  maxTokensPerTurn: 4096,
+  modelOptions: { maxTokens: 4096 },
   maxIterations: 10,
   tools: [...],
 })
@@ -240,7 +240,7 @@ See `../scheduling/REFERENCE.md` for recurring agent tasks.
 ## Retry and Resilience
 
 - Tool `execute` functions support `retryable: true` (default) and `maxRetries: 3` (default)
-- Provider API calls are retried automatically on transient failures
+- Implement provider-level retries or fallback model selection in your host when your reliability target requires it
 - Use `timeoutMs` on tools to prevent hanging
 - Monitor `mistake_limit` finish reason to detect systematic tool failures
 

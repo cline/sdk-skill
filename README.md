@@ -1,6 +1,6 @@
 # Cline SDK Skill
 
-Cline SDK reference docs for AI coding assistants. Covers the Agent runtime, ClineCore sessions, custom tools, plugins, events, LLM providers, scheduling, multi-agent teams, and production deployment.
+Cline SDK reference docs for AI coding assistants. Covers the direct Agent runtime, ClineCore sessions, custom tools, plugins, events, LLM providers, scheduling, multi-agent teams, and production deployment.
 
 For full documentation, visit [docs.cline.bot/sdk](https://docs.cline.bot/sdk).
 
@@ -95,9 +95,9 @@ The main `SKILL.md` contains decision trees for:
 
 ## Topics Covered
 
-API Surfaces: Agent (lightweight stateless loop), ClineCore (full runtime with persistence)
+API Surfaces: Agent (lightweight in-memory loop), ClineCore (full runtime with persistence)
 
-Tools: Custom tool creation with Zod/JSON Schema, built-in tools (bash, editor, read_files, search, apply_patch, fetch_web), tool policies
+Tools: Custom tool creation with Zod/JSON Schema, built-in tools (`read_files`, `search_codebase`, `run_commands`, `fetch_web_content`, `apply_patch`, `editor`, `skills`, `ask_question`, `submit_and_exit`), tool policies
 
 Plugins: Extension system, hooks, lifecycle stages, distribution
 

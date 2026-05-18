@@ -26,7 +26,10 @@ await cline.start({
   config: {
     providerId: "anthropic",
     modelId: "claude-sonnet-4-6",
+    cwd: process.cwd(),
+    systemPrompt: "You are a helpful coding agent.",
     enableSpawnAgent: true,
+    enableAgentTeams: false,
     enableTools: true,
   },
 })
@@ -36,15 +39,12 @@ When `enableSpawnAgent` is true, the agent gets access to sub-agent tools:
 
 | Tool | Description |
 |------|-------------|
-| `start_subagent` | Spawn a background agent with a task |
-| `message_subagent` | Send a message to a running sub-agent |
-| `handoff_to_agent` | Delegate the current task entirely |
-| `submit_and_exit` | Signal completion |
+| `spawn_agent` | Run a delegated task with a focused sub-agent |
 
 ### How Sub-Agents Work
 
 1. The parent agent decides a subtask can be delegated
-2. It calls `start_subagent` with a role, task description, and optionally a preset
+2. It calls `spawn_agent` with a focused system prompt and task description
 3. The sub-agent runs independently in the background
 4. The parent can check status or send follow-up messages
 5. Sub-agent results are available to the parent when complete
@@ -57,9 +57,13 @@ Teams provide persistent, cross-session coordination between agents.
 
 ```typescript
 await cline.start({
+  prompt: "Coordinate the auth sprint",
   config: {
     providerId: "anthropic",
     modelId: "claude-sonnet-4-6",
+    cwd: process.cwd(),
+    systemPrompt: "You coordinate a team of agents.",
+    enableSpawnAgent: true,
     enableAgentTeams: true,
     teamName: "auth-sprint",
     enableTools: true,
@@ -74,22 +78,33 @@ When `enableAgentTeams` is true, the coordinator agent gets:
 | Tool | Description |
 |------|-------------|
 | `team_spawn_teammate` | Create a new agent with a role and task |
-| `team_delegate_task` | Assign a task to an existing teammate |
-| `team_check_status` | Check on a delegated task's progress |
-| `team_get_result` | Get the completed result from a teammate |
+| `team_shutdown_teammate` | Shut down a teammate agent |
+| `team_task` | Create, update, or inspect team tasks |
+| `team_run_task` | Start a run for a teammate task |
+| `team_cancel_run` | Cancel a teammate run |
+| `team_status` | Inspect team and teammate status |
+| `team_list_runs` | List teammate runs |
+| `team_await_runs` | Wait for selected runs |
+| `team_send_message` | Send a mailbox message |
+| `team_broadcast` | Broadcast a mailbox message |
+| `team_read_mailbox` | Read team mailbox messages |
+| `team_mission_log` | Append or read mission log entries |
+| `team_cleanup` | Clean up team state |
+| `team_create_outcome` | Create an outcome record |
+| `team_attach_outcome_fragment` | Attach a fragment to an outcome |
+| `team_review_outcome_fragment` | Review an outcome fragment |
+| `team_finalize_outcome` | Finalize an outcome |
+| `team_list_outcomes` | List outcome records |
 
 ### Team Persistence
 
 Teams store shared state in:
 
 ```
-~/.cline/data/teams/[team-name]/
-  task-board.json    # task assignments and status
-  mailbox.json       # inter-agent messages
-  mission-log.json   # coordination log
+~/.cline/data/
 ```
 
-This state persists across sessions, so team members can pick up where they left off.
+Team state is persisted by the ClineCore session and team stores. Treat the storage layout as an implementation detail and use the team tools or session APIs instead of reading files directly.
 
 ### CLI Team Access
 
@@ -125,6 +140,7 @@ await cline.start({
     Spawn a sub-agent for each topic, then synthesize the results.`,
   config: {
     enableSpawnAgent: true,
+    enableAgentTeams: false,
     enableTools: true,
     // ...
   },
@@ -142,6 +158,7 @@ await cline.start({
     to a teammate. Check status on any in-progress tasks.`,
   config: {
     enableAgentTeams: true,
+    enableSpawnAgent: true,
     teamName: "auth-sprint",
     enableTools: true,
     // ...

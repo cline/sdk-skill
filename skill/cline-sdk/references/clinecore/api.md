@@ -12,7 +12,7 @@ const cline = await ClineCore.create(options: ClineCoreOptions)
 
 ```typescript
 interface ClineCoreOptions {
-  clientName: string                     // identifies your app
+  clientName?: string                    // identifies your app
   distinctId?: string                    // user/instance identifier
   backendMode?: "auto" | "local" | "hub" | "remote"
   hub?: HubOptions
@@ -62,7 +62,7 @@ interface ClineCoreStartInput {
   source?: string
   interactive?: boolean
   sessionMetadata?: Record<string, unknown>
-  initialMessages?: AgentMessage[]
+  initialMessages?: Message[]
   toolPolicies?: Record<string, ToolPolicy>
   capabilities?: RuntimeCapabilities
 }
@@ -73,31 +73,28 @@ interface ClineCoreStartInput {
 ```typescript
 interface CoreSessionConfig {
   cwd: string                           // working directory
+  workspaceRoot?: string                // workspace root when different from cwd
   providerId: string                    // LLM provider
   modelId: string                       // model identifier
   apiKey?: string                       // provider API key
   systemPrompt: string                  // custom system prompt
-  extraTools?: AgentTool[]              // additional custom tools
-  toolPolicies?: Record<string, ToolPolicy>
+  extraTools?: readonly AgentTool[]     // additional custom tools
   enableTools: boolean                  // enable built-in tools
-  hooks?: Partial<AgentRuntimeHooks>    // runtime hooks
+  hooks?: AgentHooks                    // runtime hooks
   extensions?: AgentPlugin[]            // plugins loaded inline
   pluginPaths?: string[]                // paths to plugin packages
-  extensionLoading?: "isolated" | "direct"
-  extensionContext?: {                  // context passed to plugin setup()
-    workspace?: { rootPath: string; cwd: string }
-  }
-  checkpointConfig?: CoreCheckpointConfig
-  compactionConfig?: CoreCompactionConfig
+  extensionContext?: ExtensionContext   // from @cline/shared
+  checkpoint?: CoreCheckpointConfig
+  compaction?: CoreCompactionConfig
   telemetry?: ITelemetryService
   logger?: BasicLogger
-  enableSpawnAgent?: boolean            // enable sub-agent spawning
-  enableAgentTeams?: boolean            // enable team coordination
+  enableSpawnAgent: boolean             // enable sub-agent spawning
+  enableAgentTeams: boolean             // enable team coordination
   teamName?: string                     // team identifier
 }
 ```
 
-`extensions` passes plugin objects directly. `pluginPaths` points to directories with `package.json` containing a `cline.plugins` field. Set `extensionContext.workspace` so plugins receive `ctx.workspaceInfo` in their `setup()` call -- without it, `ctx.workspaceInfo` is undefined.
+`extensions` passes plugin objects directly. `pluginPaths` can point at plugin files or directories. Directory plugins can declare entries in `package.json` under `cline.plugins`; otherwise `index.ts` or `index.js` is used when present. ClineCore builds `ctx.workspaceInfo` from `cwd` or `workspaceRoot`, so pass those fields for predictable workspace-aware plugins.
 
 ## Follow-Up Messages
 
@@ -132,9 +129,12 @@ const unsubscribe = cline.subscribe(
 ```typescript
 type CoreSessionEvent =
   | { type: "chunk"; payload: SessionChunkEvent }
-  | { type: "agent_event"; payload: { sessionId: string, event: AgentEvent } }
+  | { type: "agent_event"; payload: { sessionId: string, event: AgentEvent, teamAgentId?: string, teamRole?: "lead" | "teammate" } }
   | { type: "ended"; payload: SessionEndedEvent }
   | { type: "team_progress"; payload: SessionTeamProgressEvent }
+  | { type: "pending_prompts"; payload: SessionPendingPromptsEvent }
+  | { type: "pending_prompt_submitted"; payload: SessionPendingPromptSubmittedEvent }
+  | { type: "session_snapshot"; payload: SessionSnapshotEvent }
   | { type: "status"; payload: { sessionId: string, status: string } }
   | { type: "hook"; payload: SessionToolEvent }
 ```
@@ -161,19 +161,19 @@ interface SessionEndedEvent {
 ### list(limit?, options?)
 
 ```typescript
-const sessions: SessionRecord[] = await cline.list(50)
+const sessions: SessionHistoryRecord[] = await cline.list(50)
 ```
 
 ### get(sessionId)
 
 ```typescript
-const session: SessionRecord = await cline.get(sessionId)
+const session: SessionRecord | undefined = await cline.get(sessionId)
 ```
 
 ### readMessages(sessionId)
 
 ```typescript
-const messages: AgentMessage[] = await cline.readMessages(sessionId)
+const messages: Message[] = await cline.readMessages(sessionId)
 ```
 
 ### getAccumulatedUsage(sessionId)
@@ -213,7 +213,7 @@ await cline.delete(sessionId)
 Restore a session from a checkpoint:
 
 ```typescript
-await cline.restore({ sessionId, checkpointId })
+await cline.restore({ sessionId, checkpointRunCount: 3 })
 ```
 
 ### dispose(reason?)
@@ -250,13 +250,11 @@ Control tool access at the session level:
 ```typescript
 const session = await cline.start({
   prompt: "Review the code",
-  config: {
-    ...config,
-    toolPolicies: {
-      read_files: { autoApprove: true },
-      run_commands: { autoApprove: false },
-      editor: { enabled: false },
-    },
+  config: { ... },
+  toolPolicies: {
+    read_files: { autoApprove: true },
+    run_commands: { autoApprove: false },
+    editor: { enabled: false },
   },
 })
 ```
@@ -298,7 +296,7 @@ const cline = await ClineCore.create({
 // Access automation methods
 cline.automation.start()
 cline.automation.stop()
-cline.automation.reconcile(specs)
+cline.automation.reconcileNow()
 cline.automation.ingestEvent(event)
 cline.automation.listEvents()
 cline.automation.listSpecs()
@@ -312,7 +310,7 @@ cline.automation.listRuns()
 const settings = await cline.settings.list()
 
 // Toggle tools, plugins, MCP servers
-await cline.settings.toggle({ type: "tool", name: "run_commands", enabled: true })
+await cline.settings.toggle({ type: "tools", name: "run_commands", enabled: true })
 ```
 
 ## See Also

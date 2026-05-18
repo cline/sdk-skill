@@ -9,9 +9,9 @@ If the agent keeps iterating without completing:
 - If using tools, ensure the system prompt guides the model toward calling the completion tool when done.
 - Check that `completesRun` tools return successfully (not throwing errors).
 
-## Tool Errors Count as Mistakes
+## Tool Errors Become Error Results
 
-When a tool's `execute` function throws an exception, the SDK counts it as a "mistake." After too many mistakes, the agent stops with a `mistake_limit` finish reason.
+When a direct Agent tool's `execute` function throws an exception, the runtime catches it and returns a `tool-result` part with `isError: true`. ClineCore wraps the direct runtime and can treat repeated failed tool turns as recoverable mistakes.
 
 Instead, return errors as structured data:
 
@@ -29,14 +29,13 @@ execute: async (input) => {
 
 ## run() vs continue()
 
-- Call `run()` for the first interaction. It sets up the conversation.
-- Call `continue()` for subsequent messages. It appends to the existing conversation.
-- Calling `run()` a second time resets the conversation history.
-- Use `agent.hasRun` to check which method to call.
+- `run(input)` and `continue(input?)` both execute against the current in-memory message history.
+- Neither method resets history. Use `restore(messages)` to replace history, or create a new `Agent` for a fresh conversation.
+- There is no `agent.hasRun` property. Track first-run state in your app if you need separate UI behavior.
 
 ## Browser Compatibility
 
-`@cline/agents` (and by extension, the `Agent` class) is browser-safe with no Node.js dependencies. However, `@cline/core` and `ClineCore` require Node.js 22+. If you import from `@cline/sdk`, you get everything including the Node-only code. For browser usage, import directly from `@cline/agents`:
+`@cline/agents` is browser-safe. `@cline/sdk` re-exports `@cline/core`, which is Node-oriented. For browser usage, import directly from `@cline/agents`:
 
 ```typescript
 import { Agent } from "@cline/agents"
@@ -98,7 +97,7 @@ The Agent holds all messages in memory. For long-running conversations, memory u
 
 - Using `ClineCore` with compaction for long sessions
 - Periodically creating a new agent with a summary of the conversation
-- Monitoring `result.usage.totalInputTokens` to track context growth
+- Monitoring `result.usage.inputTokens` and `result.messages.length` to track context growth
 
 ## Abort Signal Handling in Tools
 

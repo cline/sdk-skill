@@ -51,22 +51,27 @@ cline schedule executions <schedule-id>
 
 ## File-Based Specs
 
-Create Markdown files in `~/.cline/cron/` (global) or `.cline/cron/` (workspace):
+Create Markdown files in `~/.cline/cron/` (global) or `.cline/cron/` (workspace). Trigger kind is inferred from the filename:
+
+- `*.cron.md` is recurring.
+- `events/*.event.md` is event-driven.
+- `*.md` without `.cron` under `.cline/cron/` is one-off.
 
 ### Recurring Schedule
 
 ```markdown
 ---
-trigger: schedule
+id: daily-dependency-check
+title: Daily Dependency Check
+workspaceRoot: /path/to/project
 schedule: "0 9 * * MON-FRI"
 timezone: America/New_York
-mode: exclusive
-prompt: "Check for dependency updates and create PRs for any outdated packages."
+mode: act
 modelSelection:
   providerId: anthropic
   modelId: claude-sonnet-4-6
-tools:
-  enabled: true
+tools: run_commands,read_files
+enabled: true
 ---
 
 Additional context or instructions for the agent go in the body.
@@ -76,8 +81,10 @@ Additional context or instructions for the agent go in the body.
 
 ```markdown
 ---
-trigger: one_off
-prompt: "Generate a comprehensive test coverage report."
+id: coverage-report
+title: Generate a comprehensive test coverage report
+workspaceRoot: /path/to/project
+mode: plan
 modelSelection:
   providerId: anthropic
   modelId: claude-sonnet-4-6
@@ -88,13 +95,16 @@ modelSelection:
 
 ```markdown
 ---
-trigger: event
-eventType: github.pull_request.opened
+id: pr-review
+title: Review New Pull Requests
+workspaceRoot: /path/to/project
+event: github.pull_request.opened
 filters:
   repository: myorg/myrepo
-debounceMs: 5000
-cooldownMs: 60000
-prompt: "Review the PR for security issues and code quality."
+debounceSeconds: 5
+cooldownSeconds: 60
+maxParallel: 2
+mode: act
 modelSelection:
   providerId: anthropic
   modelId: claude-sonnet-4-6
@@ -104,32 +114,42 @@ modelSelection:
 ## CronSpec Types
 
 ```typescript
-interface CronScheduleSpec {
-  trigger: "schedule"
+interface CronSpecCommonFields {
+  id?: string
+  title?: string
+  prompt?: string
+  workspaceRoot: string         // required in parsed file specs
+  mode?: "act" | "plan" | "yolo"
+  systemPrompt?: string
+  modelSelection?: { providerId: string; modelId?: string }
+  maxIterations?: number
+  timeoutSeconds?: number
+  tools?: string[]
+  extensions?: Array<"rules" | "skills" | "plugins">
+  source?: string
+  tags?: string[]
+  enabled?: boolean
+  metadata?: Record<string, unknown>
+}
+
+interface CronScheduleSpec extends CronSpecCommonFields {
+  triggerKind: "schedule"
   schedule: string              // cron expression
   timezone?: string
-  mode?: "exclusive" | "concurrent"
-  prompt: string
-  modelSelection?: { providerId: string; modelId?: string }
-  extensionLoading?: "isolated" | "direct"
-  configExtensions?: RuntimeConfigExtensionKind[]
-  tools?: { enabled?: boolean; names?: string[] }
 }
 
-interface CronOneOffSpec {
-  trigger: "one_off"
-  prompt: string
-  modelSelection?: { providerId: string; modelId?: string }
+interface CronOneOffSpec extends CronSpecCommonFields {
+  triggerKind: "one_off"
 }
 
-interface CronEventSpec {
-  trigger: "event"
-  eventType: string             // e.g., "github.pull_request.opened"
+interface CronEventSpec extends CronSpecCommonFields {
+  triggerKind: "event"
+  event: string                 // e.g., "github.pull_request.opened"
   filters?: Record<string, unknown>
-  debounceMs?: number
-  cooldownMs?: number
-  prompt: string
-  modelSelection?: { providerId: string; modelId?: string }
+  debounceSeconds?: number
+  dedupeWindowSeconds?: number
+  cooldownSeconds?: number
+  maxParallel?: number
 }
 ```
 
@@ -142,27 +162,27 @@ const cline = await ClineCore.create({
 })
 
 // Start automation service
-cline.automation.start()
+await cline.automation.start()
 
 // Ingest an external event
 cline.automation.ingestEvent({
   eventId: "evt-123",
   eventType: "github.pull_request.opened",
   source: "github",
-  timestamp: Date.now(),
+  occurredAt: new Date().toISOString(),
   payload: { pr: { number: 42, title: "..." } },
 })
 
 // List specs, runs, events
-const specs = await cline.automation.listSpecs()
-const runs = await cline.automation.listRuns()
-const events = await cline.automation.listEvents()
+const specs = cline.automation.listSpecs()
+const runs = cline.automation.listRuns()
+const events = cline.automation.listEvents()
 
-// Reconcile specs from directory
-await cline.automation.reconcile(specDirectory)
+// Reconcile specs from the configured cron directory
+await cline.automation.reconcileNow()
 
 // Stop automation
-cline.automation.stop()
+await cline.automation.stop()
 ```
 
 ## Event Ingestion from Plugins
@@ -170,12 +190,15 @@ cline.automation.stop()
 Plugins can declare and emit automation events:
 
 ```typescript
+import type { AgentPlugin } from "@cline/sdk"
+
 const webhookPlugin: AgentPlugin = {
   name: "webhook-events",
   manifest: { capabilities: ["automationEvents"] },
   setup(api) {
     api.registerAutomationEventType({
-      type: "webhook.received",
+      eventType: "webhook.received",
+      source: "custom",
       description: "External webhook received",
     })
   },
@@ -185,25 +208,27 @@ const webhookPlugin: AgentPlugin = {
 Submit events via the plugin context:
 
 ```typescript
-ctx.automation.ingestEvent({
+ctx.automation?.ingestEvent({
   eventId: "evt-456",
   eventType: "webhook.received",
   source: "custom",
-  timestamp: Date.now(),
+  occurredAt: new Date().toISOString(),
   payload: { ... },
 })
 ```
 
-## Concurrency Control
+## Event Concurrency Control
 
-| Mode | Behavior |
+| Field | Behavior |
 |------|----------|
-| `"exclusive"` | Skip if previous run still active |
-| `"concurrent"` | Allow overlapping runs |
+| `debounceSeconds` | Delay before queueing to allow related events to arrive |
+| `dedupeWindowSeconds` | Suppress duplicate events for a period |
+| `cooldownSeconds` | Wait after a matched run before queueing another |
+| `maxParallel` | Limit concurrent runs for an event spec |
 
 ## Run Reports
 
-Each completed run writes a Markdown report to `.cline/cron/reports/<run-id>.md` with:
+Completed runs can write Markdown reports under the resolved cron specs directory with:
 - Run metadata (spec, trigger, timing)
 - Summary of agent output
 - Usage (tokens, cost)

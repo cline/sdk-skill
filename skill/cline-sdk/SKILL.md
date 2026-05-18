@@ -1,6 +1,6 @@
 ---
 name: cline-sdk
-description: Comprehensive Cline SDK skill for building AI agents. Covers the Agent runtime, ClineCore sessions, custom tools, plugins, events, LLM providers, scheduling, multi-agent teams, and production deployment. Use for any task involving @cline/sdk or its sub-packages.
+description: Comprehensive Cline SDK skill for building AI agents. Covers the direct Agent runtime, ClineCore sessions, custom tools, plugins, events, LLM providers, scheduling, multi-agent teams, and production deployment. Use for any task involving @cline/sdk or its sub-packages.
 metadata:
    references: agent, clinecore
 ---
@@ -13,13 +13,14 @@ Consolidated skill for building AI agents with the Cline SDK. Use the decision t
 
 Follow these rules in all Cline SDK code:
 
-1. Install with `npm install @cline/sdk`. The `@cline/sdk` package re-exports everything from `@cline/core`, `@cline/agents`, `@cline/llms`, and `@cline/shared`.
+1. Install with `npm install @cline/sdk`. The `@cline/sdk` package re-exports `@cline/core`, not every sub-package directly. Core re-exports the public SDK surface such as `ClineCore`, `Agent`, `createAgentRuntime`, `createTool`, built-in tool helpers, provider helpers, and the `Llms` namespace. Import from `@cline/agents`, `@cline/llms`, or `@cline/shared` only when you need APIs that core does not re-export, such as `AgentRuntime`, `createAgent`, or some low-level types.
 2. Requires Node.js 22 or later.
 3. Use `createTool()` from `@cline/sdk` (or `@cline/shared`) to define tools. Tool names must be `snake_case`.
-4. Return errors as structured data from tool `execute` functions. Throwing counts as a "mistake" against the agent's mistake limit.
+4. Prefer returning structured error data from tool `execute` functions when the agent can recover. Direct `Agent` converts thrown tool errors into error tool results; ClineCore can also count repeated failed tool turns toward its mistake-limit handling.
 5. Use `lifecycle: { completesRun: true }` on tools that should end the agent loop (e.g. a "submit answer" tool).
 6. When using `ClineCore`, always call `dispose()` when done to clean up resources.
-7. The standalone `Agent` and `ClineCore` have different event systems. For `Agent`: use `agent.subscribe()` to get `AgentRuntimeEvent` types (text streaming is `"assistant-text-delta"`, result text is `result.outputText`). For `ClineCore`: use `cline.subscribe()` to get `CoreSessionEvent` types. Render user-facing text, reasoning, and tool activity from `"agent_event"` payloads (`content_start`, `content_update`, `content_end`, `done`). Treat `"chunk"` events as raw transport chunks with `{ stream, chunk, ts }`, not as typed text deltas. `ClineCore` result text is `result.text`. There is no top-level `onEvent` field on `AgentRuntimeConfig` -- use `agent.subscribe()` or `hooks.onEvent` instead. Do not use event types like `"content_update"` or `"content_start"` with `agent.subscribe()` -- those are internal legacy types from the ClineCore adapter layer.
+7. The direct `Agent` and `ClineCore` have different event systems. For `Agent`: use `agent.subscribe()` to get `AgentRuntimeEvent` types, text streaming is `"assistant-text-delta"`, and result text is `result.outputText`. For `ClineCore`: use `cline.subscribe()` to get `CoreSessionEvent` types. Render user-facing text, reasoning, and tool activity from `"agent_event"` payloads (`content_start`, `content_update`, `content_end`, `done`). Treat `"chunk"` events as raw transport chunks with `{ stream, chunk, ts }`, not as typed text deltas. `ClineCore` result text is `result.text`. There is no top-level `onEvent` field on `AgentRuntimeConfig`; use `agent.subscribe()` or `hooks.onEvent` instead. Do not use `"content_update"` or `"content_start"` with `agent.subscribe()`; those are host-facing `AgentEvent` types carried inside ClineCore `agent_event` events.
+8. For direct `Agent`, `plugins` are simple runtime plugins with `setup(context)` returning `{ tools, hooks }`. For `ClineCore`, `extensions` are `AgentPlugin` objects with `manifest`, `setup(api, ctx)`, and optional `hooks`. Do not use ClineCore plugin examples inside direct `Agent.plugins`.
 
 ## How to Use This Skill
 
@@ -70,8 +71,8 @@ Cross-cutting concepts in `./references/<concept>/` have `REFERENCE.md` as the e
 
 ```
 Which API?
-+-- I want a simple, stateless agent with custom tools
-|   +-- agent/ (Agent class from @cline/agents)
++-- I want a simple, in-memory agent with custom tools
+|   +-- agent/ (Agent class from @cline/agents, re-exported by @cline/sdk)
 +-- I need session persistence, built-in tools, config discovery
 |   +-- clinecore/ (ClineCore from @cline/core)
 +-- I want built-in file/shell/search/web tools
@@ -89,7 +90,7 @@ Which API?
 ```
 Tools?
 +-- Define a custom tool with schema -> tools/REFERENCE.md
-+-- Use built-in tools (run_commands, editor, read_files) -> tools/REFERENCE.md (built-in section)
++-- Use built-in tools (read_files, search_codebase, run_commands, etc.) -> tools/REFERENCE.md (built-in section)
 +-- Control tool approval/policies -> tools/REFERENCE.md (policies section)
 +-- Tool that ends the agent loop -> tools/REFERENCE.md (completion tools)
 +-- Package tools as a reusable plugin -> plugins/REFERENCE.md
@@ -177,7 +178,7 @@ Production?
 ### API Surfaces
 | API | Entry File | Description |
 |-----|------------|-------------|
-| Agent | `./references/agent/REFERENCE.md` | Lightweight stateless agent loop |
+| Agent | `./references/agent/REFERENCE.md` | Lightweight in-memory agent loop |
 | ClineCore | `./references/clinecore/REFERENCE.md` | Full runtime with sessions, persistence, built-in tools |
 
 ### Cross-Cutting Concepts
@@ -194,9 +195,9 @@ Production?
 ### Package Map
 | Package | Purpose |
 |---------|---------|
-| `@cline/sdk` | Everything you need, install this one |
-| `@cline/core` | Sessions, persistence, built-in tools, config, hub |
-| `@cline/agents` | Stateless agent loop, tool orchestration, streaming |
+| `@cline/sdk` | User-facing alias for `@cline/core`; install this first |
+| `@cline/core` | Sessions, persistence, built-in tools, config, hub, and selected re-exports |
+| `@cline/agents` | Browser-compatible AgentRuntime class and lower-level factories |
 | `@cline/llms` | LLM provider gateway |
 | `@cline/shared` | Types, tool helpers, hook engine |
 

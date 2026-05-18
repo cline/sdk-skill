@@ -1,15 +1,15 @@
 # Agent Runtime
 
-The `Agent` class (also exported as `AgentRuntime`) is the lightweight, stateless agent loop from `@cline/agents`. It handles the core iteration cycle: send messages to an LLM, execute tool calls, collect results, and repeat until the task is done.
+The `Agent` class is the lightweight in-memory agent loop. It is implemented in `@cline/agents` and re-exported by `@cline/sdk` through `@cline/core`. It sends messages to an LLM, executes tool calls, collects results, and repeats until the task is done.
 
 ## When to Use Agent
 
 | Use Agent when... | Use ClineCore instead when... |
 |---|---|
-| You want a simple agent with custom tools | You need built-in tools (bash, editor, etc.) |
+| You want a simple agent with custom tools | You need built-in tools (`run_commands`, `editor`, etc.) |
 | You want minimal dependencies | You need session persistence |
-| You need browser compatibility | You need config discovery from `.cline/` |
-| You're building a stateless worker | You need multi-process session sharing |
+| You need browser compatibility through `@cline/agents` | You need config discovery from `.cline/` |
+| You manage persistence yourself | You need multi-process session sharing |
 | You want full control over the runtime | You want batteries-included setup |
 
 ## Quick Start
@@ -39,11 +39,13 @@ The Agent operates in a loop:
 5. If the model returns text without tool calls, the run completes
 6. Emit events throughout for streaming
 
-The agent is stateless in the sense that it does not persist anything to disk. Conversation history is held in memory and can be accessed via `snapshot()`.
+The agent does not persist anything to disk. Conversation history is held in memory and can be accessed via `snapshot()`.
 
 ## Key APIs
 
-- `new Agent(config)` or `createAgent(config)` - Create an agent
+- `new Agent(config)` - Create an agent from `@cline/sdk`
+- `createAgentRuntime(config)` - Factory re-exported by `@cline/sdk`
+- `AgentRuntime` and `createAgent(config)` - Lower-level exports from `@cline/agents`
 - `agent.run(input)` - Start a run with user input
 - `agent.continue(input?)` - Continue an existing conversation
 - `agent.abort(reason?)` - Cancel an active run
@@ -70,7 +72,7 @@ const second = await agent.continue("Now multiply that by 3")
 console.log(second.outputText)
 ```
 
-Use `agent.hasRun` to check if a run has already been executed, which determines whether to call `run()` or `continue()`.
+There is no `agent.hasRun` property. Keep your own conversation state, or inspect `agent.snapshot().messages.length` if you need to decide whether to pass new user input.
 
 ## Event Streaming
 
