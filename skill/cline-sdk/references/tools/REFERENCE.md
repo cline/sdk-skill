@@ -251,11 +251,11 @@ describe("deploy tool", () => {
 
 ## MCP Tool Integration
 
-ClineCore can connect to MCP (Model Context Protocol) servers for additional tools. Configure in `.cline/mcp-servers.json`:
+ClineCore can connect to MCP (Model Context Protocol) servers for additional tools. Configure the MCP settings file at `~/.cline/data/settings/cline_mcp_settings.json`, or set `CLINE_MCP_SETTINGS_PATH` to use a custom file:
 
 ```json
 {
-  "servers": {
+  "mcpServers": {
     "my-server": {
       "command": "node",
       "args": ["./mcp-server.js"]
