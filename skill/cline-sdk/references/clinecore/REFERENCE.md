@@ -88,11 +88,18 @@ The default mode is `"auto"`. For simple scripts and CLI tools, `"local"` avoids
 - `cline.send({ sessionId, prompt })` - Send follow-up message
 - `cline.subscribe(listener)` - Listen to session events
 - `cline.list()` - List sessions
+- `cline.listHistory(options)` - List sessions with history filters
 - `cline.get(sessionId)` - Get session metadata
 - `cline.readMessages(sessionId)` - Read persisted messages
 - `cline.getAccumulatedUsage(sessionId)` - Token/cost totals
+- `cline.pendingPrompts.list/update/delete(...)` - Inspect or steer queued prompts for active interactive sessions
+- `cline.updateSessionModel(sessionId, modelId)` - Switch model for an active session
 - `cline.abort(sessionId)` - Abort a session
+- `cline.stop(sessionId)` - Stop a session
+- `cline.restore(input)` - Restore a checkpoint
 - `cline.delete(sessionId)` - Delete a session
+- `cline.settings.list/toggle(...)` - Inspect or toggle tools, plugins, MCP, skills, rules, and workflows
+- `cline.automation.*` - Manage automation when enabled
 - `cline.dispose()` - Clean up resources
 
 See `api.md` for full API details.

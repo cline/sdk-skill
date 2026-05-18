@@ -25,6 +25,9 @@ cline schedule create "Daily standup" \
 # List schedules
 cline schedule list
 
+# View one schedule
+cline schedule get <schedule-id>
+
 # Trigger a schedule immediately
 cline schedule trigger <schedule-id>
 
@@ -36,7 +39,15 @@ cline schedule resume <schedule-id>
 cline schedule delete <schedule-id>
 
 # View past executions
-cline schedule executions <schedule-id>
+cline schedule history <schedule-id>
+
+# Other management commands
+cline schedule active
+cline schedule upcoming
+cline schedule stats <schedule-id>
+cline schedule update <schedule-id> --prompt "New prompt"
+cline schedule export <schedule-id> --to ./schedule.yaml
+cline schedule import ./schedules.json
 ```
 
 ## Cron Expressions
@@ -195,26 +206,22 @@ import type { AgentPlugin } from "@cline/sdk"
 const webhookPlugin: AgentPlugin = {
   name: "webhook-events",
   manifest: { capabilities: ["automationEvents"] },
-  setup(api) {
+  setup(api, ctx) {
     api.registerAutomationEventType({
       eventType: "webhook.received",
       source: "custom",
       description: "External webhook received",
     })
+
+    ctx.automation?.ingestEvent({
+      eventId: "evt-456",
+      eventType: "webhook.received",
+      source: "custom",
+      occurredAt: new Date().toISOString(),
+      payload: { ... },
+    })
   },
 }
-```
-
-Submit events via the plugin context:
-
-```typescript
-ctx.automation?.ingestEvent({
-  eventId: "evt-456",
-  eventType: "webhook.received",
-  source: "custom",
-  occurredAt: new Date().toISOString(),
-  payload: { ... },
-})
 ```
 
 ## Event Concurrency Control

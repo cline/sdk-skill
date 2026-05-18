@@ -39,8 +39,11 @@ interface AgentRuntimeConfigWithProvider {
   toolPolicies?: Record<string, ToolPolicy>
   hooks?: Partial<AgentRuntimeHooks>
   plugins?: AgentRuntimePlugin[]       // from @cline/shared, or use structural typing
+  logger?: BasicLogger
+  telemetry?: ITelemetryService
   maxIterations?: number
   toolExecution?: "sequential" | "parallel"
+  requestToolApproval?: (request: ToolApprovalRequest) => Promise<ToolApprovalResult> | ToolApprovalResult
 }
 ```
 
@@ -57,14 +60,40 @@ interface AgentRuntimeConfigWithModel {
   toolPolicies?: Record<string, ToolPolicy>
   hooks?: Partial<AgentRuntimeHooks>
   plugins?: AgentRuntimePlugin[]       // from @cline/shared, or use structural typing
+  logger?: BasicLogger
+  telemetry?: ITelemetryService
   maxIterations?: number
   toolExecution?: "sequential" | "parallel"
+  requestToolApproval?: (request: ToolApprovalRequest) => Promise<ToolApprovalResult> | ToolApprovalResult
 }
 ```
 
 Note: there is no top-level `onEvent` field on `AgentRuntimeConfig`. For event streaming, use `agent.subscribe()` or `hooks.onEvent` (see AgentRuntimeHooks below).
 
 Direct Agent runtime plugins are not the same as ClineCore `AgentPlugin` extensions. A runtime plugin has `name` and optional `setup(context)` returning `{ tools, hooks }`. Use ClineCore `AgentPlugin` objects only with `config.extensions`.
+
+### Advanced AgentRuntimeConfig Fields
+
+```typescript
+interface AgentRuntimeConfig {
+  sessionId?: string
+  agentId?: string
+  conversationId?: string
+  parentAgentId?: string | null
+  agentRole?: string
+  messageModelInfo?: AgentMessage["modelInfo"]
+  completionPolicy?: {
+    requireCompletionTool?: boolean
+    completionGuard?: () => string | undefined
+  }
+  toolContextMetadata?: Record<string, unknown>
+  prepareTurn?: (context: AgentRuntimePrepareTurnContext) =>
+    AgentRuntimePrepareTurnResult | undefined | Promise<AgentRuntimePrepareTurnResult | undefined>
+  consumePendingUserMessage?: () => string | undefined | Promise<string | undefined>
+}
+```
+
+Use the identity fields when embedding `Agent` inside a larger host that needs stable session, conversation, or parent-agent routing. Use `requestToolApproval` with `toolPolicies` entries that set `autoApprove: false`; without that callback, approval-required tools are blocked and return an error tool result.
 
 ## Methods
 

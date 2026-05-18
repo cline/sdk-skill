@@ -106,7 +106,7 @@ Long-running tools should respect the abort signal:
 ```typescript
 execute: async (input, context) => {
   for (const item of items) {
-    if (context.abortSignal?.aborted) {
+    if (context.signal?.aborted) {
       return { partial: results, aborted: true }
     }
     results.push(await process(item))

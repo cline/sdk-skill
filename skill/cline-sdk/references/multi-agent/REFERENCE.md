@@ -7,14 +7,14 @@ The Cline SDK supports two models for multi-agent work: sub-agents (parent-child
 | Feature | Sub-Agents | Teams |
 |---------|-----------|-------|
 | Enable with | `enableSpawnAgent: true` | `enableAgentTeams: true` |
-| Persistence | Session-scoped only | Across sessions |
+| Persistence | Result returned to parent only | Across sessions |
 | Coordination | Parent-child hierarchy | Peer-to-peer |
 | Shared state | None | Task board, mailbox, mission log |
 | Best for | One-off delegation | Complex multi-session projects |
 
 ## Sub-Agents
 
-Sub-agents are spawned by a parent agent during a run. They execute independently and report results back.
+Sub-agents are spawned by a parent agent during a run. The current `spawn_agent` tool runs the delegated task synchronously and returns the sub-agent's result to the parent tool call.
 
 ### Enabling Sub-Agents
 
@@ -45,9 +45,9 @@ When `enableSpawnAgent` is true, the agent gets access to sub-agent tools:
 
 1. The parent agent decides a subtask can be delegated
 2. It calls `spawn_agent` with a focused system prompt and task description
-3. The sub-agent runs independently in the background
-4. The parent can check status or send follow-up messages
-5. Sub-agent results are available to the parent when complete
+3. The sub-agent runs the delegated task with its own focused prompt
+4. The tool returns the sub-agent text, iteration count, finish reason, and token usage
+5. The parent incorporates that result into its own run
 
 ## Teams
 
@@ -115,7 +115,7 @@ cline --team-name auth-sprint "Continue the auth refactor"
 ## Choosing Between Sub-Agents and Teams
 
 Use sub-agents when:
-- You need one-off parallel execution within a single session
+- You need one-off delegation within a single session
 - Tasks are independent and don't need to communicate with each other
 - Results only matter to the parent agent
 
@@ -127,17 +127,17 @@ Use teams when:
 
 ## Patterns
 
-### Parallel Research with Sub-Agents
+### Focused Research with Sub-Agents
 
-A parent agent spawns multiple sub-agents to research different topics simultaneously:
+A parent agent can call `spawn_agent` for focused subtasks and then synthesize the returned results. Each `spawn_agent` tool call waits for that delegated run to finish before the parent receives the result:
 
 ```typescript
 await cline.start({
-  prompt: `Research these three topics in parallel:
+  prompt: `Research these three topics:
     1. Current best practices for JWT auth
     2. OAuth 2.0 provider comparison
     3. Session management patterns
-    Spawn a sub-agent for each topic, then synthesize the results.`,
+    Use spawn_agent for each topic, then synthesize the returned results.`,
   config: {
     enableSpawnAgent: true,
     enableAgentTeams: false,

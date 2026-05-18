@@ -15,7 +15,9 @@ The Cline SDK provider layer lives in `@cline/llms`. The `@cline/sdk` package re
 | `"bedrock"` | AWS Bedrock models |
 | `"mistral"` | Mistral models |
 | `"openai-compatible"` | Generic OpenAI-compatible endpoint |
-| `"openrouter"`, `"cline"`, `"deepseek"`, `"xai"`, `"together"`, `"fireworks"`, `"groq"`, `"ollama"`, `"lmstudio"` | Built-in compatible provider presets |
+| `"openrouter"`, `"cline"`, `"deepseek"`, `"xai"`, `"together"`, `"fireworks"`, `"groq"`, `"cerebras"`, `"sambanova"`, `"nebius"`, `"baseten"`, `"requesty"`, `"litellm"`, `"ollama"`, `"lmstudio"` | Common built-in compatible provider presets |
+| `"huggingface"`, `"vercel-ai-gateway"`, `"v0"`, `"aihubmix"`, `"hicap"`, `"nousResearch"`, `"huawei-cloud-maas"`, `"qwen"`, `"qwen-code"`, `"doubao"`, `"zai"`, `"zai-coding-plan"`, `"moonshot"`, `"wandb"`, `"xiaomi"`, `"kilo"`, `"asksage"`, `"minimax"` | Additional built-in compatible provider presets |
+| `"claude-code"`, `"opencode"`, `"dify"`, `"oca"`, `"sapaicore"` | Additional built-in provider families and integrations |
 
 Provider and model catalogs change over time. Prefer `Llms.getProviderIds()`, `Llms.getProvider(id)`, and `Llms.getModelsForProvider(id)` over hardcoding lists in generated code.
 

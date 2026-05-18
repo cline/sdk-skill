@@ -56,13 +56,15 @@ createTool({
   inputSchema: JSONSchema | ZodSchema,  // input validation
   execute: async (input, context) => output,
   timeoutMs?: number,                   // default: 30000
-  retryable?: boolean,                  // default: true
-  maxRetries?: number,                  // default: 3
+  retryable?: boolean,                  // default: true, metadata only
+  maxRetries?: number,                  // default: 3, metadata only
   lifecycle?: {
     completesRun?: boolean              // true = ends agent loop on success
   },
 })
 ```
+
+`createTool()` records `timeoutMs`, `retryable`, and `maxRetries` on the returned tool. The direct `Agent` runtime does not currently apply a generic timeout or automatic retry wrapper around custom `execute` functions. Built-in ClineCore tools implement their own timeouts inside their executors. For custom tools, enforce deadlines inside `execute` and respect `context.signal`.
 
 ### AgentToolContext
 
@@ -198,13 +200,15 @@ For `ClineCore`, prefer `config.toolPolicies` when you want disabled built-in to
 
 ## Abort Signal in Long-Running Tools
 
-Respect the abort signal for tools that take a long time:
+Respect the abort signal for tools that take a long time. If you need a hard timeout for a custom tool, implement it inside the tool body:
 
 ```typescript
 execute: async (input, context) => {
+  const timeout = AbortSignal.timeout(30_000)
+  const signal = AbortSignal.any(context.signal ? [context.signal, timeout] : [timeout])
   const results = []
   for (const item of input.items) {
-    if (context.signal?.aborted) {
+    if (signal.aborted) {
       return { results, aborted: true, processed: results.length }
     }
     results.push(await processItem(item))

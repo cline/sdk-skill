@@ -18,9 +18,20 @@ interface ClineCoreOptions {
   hub?: HubOptions
   remote?: RemoteOptions
   capabilities?: RuntimeCapabilities
+  telemetry?: ITelemetryService
+  logger?: BasicLogger
   toolPolicies?: Record<string, ToolPolicy>
+  messagesArtifactUploader?: SessionMessagesArtifactUploader
   automation?: boolean | ClineCoreAutomationOptions
   fetch?: typeof fetch
+  sessionService?: SessionBackend
+  prepare?: (input: ClineCoreStartInput) => {
+    applyToStartSessionInput(input: ClineCoreStartInput): ClineCoreStartInput | Promise<ClineCoreStartInput>
+    dispose?(): void | Promise<void>
+  } | undefined | Promise<{
+    applyToStartSessionInput(input: ClineCoreStartInput): ClineCoreStartInput | Promise<ClineCoreStartInput>
+    dispose?(): void | Promise<void>
+  } | undefined>
 }
 ```
 
@@ -28,8 +39,8 @@ interface ClineCoreOptions {
 
 ```typescript
 interface RuntimeCapabilities {
-  requestToolApproval?: (request: ToolApprovalRequest) => Promise<ToolApprovalResult>
-  // ... other capability callbacks
+  toolExecutors?: Partial<ToolExecutors>
+  requestToolApproval?: (request: ToolApprovalRequest) => ToolApprovalResult | Promise<ToolApprovalResult>
 }
 ```
 
@@ -57,14 +68,17 @@ interface StartSessionResult {
 
 ```typescript
 interface ClineCoreStartInput {
-  prompt: string
+  prompt?: string
   config: CoreSessionConfig
   source?: string
   interactive?: boolean
   sessionMetadata?: Record<string, unknown>
   initialMessages?: Message[]
+  userImages?: string[]
+  userFiles?: string[]
   toolPolicies?: Record<string, ToolPolicy>
   capabilities?: RuntimeCapabilities
+  localRuntime?: object
 }
 ```
 
@@ -77,20 +91,42 @@ interface CoreSessionConfig {
   providerId: string                    // LLM provider
   modelId: string                       // model identifier
   apiKey?: string                       // provider API key
+  baseUrl?: string
+  headers?: Record<string, string>
+  knownModels?: Record<string, ModelInfo>
+  providerConfig?: ProviderConfig
+  thinking?: boolean
+  reasoningEffort?: ProviderConfig["reasoningEffort"]
   systemPrompt: string                  // custom system prompt
+  mode?: "act" | "plan" | "yolo" | "zen"
+  rules?: string
+  maxIterations?: number
+  toolPolicies?: Record<string, ToolPolicy>
   extraTools?: readonly AgentTool[]     // additional custom tools
   enableTools: boolean                  // enable built-in tools
+  disableMcpSettingsTools?: boolean
+  yolo?: boolean
   hooks?: AgentHooks                    // runtime hooks
+  hookErrorMode?: HookErrorMode
   extensions?: AgentPlugin[]            // plugins loaded inline
   pluginPaths?: string[]                // paths to plugin packages
   extensionContext?: ExtensionContext   // from @cline/shared
   checkpoint?: CoreCheckpointConfig
   compaction?: CoreCompactionConfig
+  execution?: AgentConfig["execution"]
   telemetry?: ITelemetryService
   logger?: BasicLogger
   enableSpawnAgent: boolean             // enable sub-agent spawning
   enableAgentTeams: boolean             // enable team coordination
   teamName?: string                     // team identifier
+  missionLogIntervalSteps?: number
+  missionLogIntervalMs?: number
+  onTeamEvent?: (event: TeamEvent) => void
+  onConsecutiveMistakeLimitReached?: (context: ConsecutiveMistakeLimitContext) =>
+    ConsecutiveMistakeLimitDecision | Promise<ConsecutiveMistakeLimitDecision>
+  toolRoutingRules?: ToolRoutingRule[]
+  skills?: string[]
+  workspaceMetadata?: string
 }
 ```
 
@@ -164,6 +200,12 @@ interface SessionEndedEvent {
 const sessions: SessionHistoryRecord[] = await cline.list(50)
 ```
 
+### listHistory(options?)
+
+```typescript
+const sessions: SessionHistoryRecord[] = await cline.listHistory({ limit: 50 })
+```
+
 ### get(sessionId)
 
 ```typescript
@@ -202,6 +244,14 @@ await cline.abort(sessionId, "User cancelled")
 await cline.stop(sessionId)
 ```
 
+### updateSessionModel(sessionId, modelId)
+
+Switch the model for an active session:
+
+```typescript
+await cline.updateSessionModel(sessionId, "claude-opus-4-7")
+```
+
 ### delete(sessionId)
 
 ```typescript
@@ -222,6 +272,21 @@ Clean up all resources. Always call this when done:
 
 ```typescript
 await cline.dispose("Shutting down")
+```
+
+## Pending Prompts
+
+Interactive sessions can queue or steer follow-up prompts while a run is active:
+
+```typescript
+const prompts = await cline.pendingPrompts.list({ sessionId })
+await cline.pendingPrompts.update({
+  sessionId,
+  promptId: prompts[0].id,
+  prompt: "Prioritize the test failures first.",
+  delivery: "steer",
+})
+await cline.pendingPrompts.delete({ sessionId, promptId: prompts[0].id })
 ```
 
 ## AgentResult

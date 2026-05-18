@@ -135,7 +135,7 @@ Plugins?
 
 ```
 Multi-agent?
-+-- Spawn one-off background agents -> multi-agent/REFERENCE.md (sub-agents)
++-- Run one-off delegated sub-agents -> multi-agent/REFERENCE.md (sub-agents)
 +-- Persistent cross-session teams -> multi-agent/REFERENCE.md (teams)
 +-- Parent-child delegation -> multi-agent/REFERENCE.md (sub-agents)
 +-- Peer-to-peer task board -> multi-agent/REFERENCE.md (teams)

@@ -95,15 +95,29 @@ agent.subscribe((event) => {
 
 ### OpenTelemetry Integration
 
-The SDK supports OpenTelemetry for traces, metrics, and logs:
+The SDK can emit telemetry through an injected `ITelemetryService`. `ClineCore.create()` does not create OpenTelemetry telemetry by itself; construct a telemetry service and pass it in:
 
 ```typescript
-import { ClineCore } from "@cline/sdk"
+import { ClineCore, createConfiguredTelemetryHandle } from "@cline/sdk"
+
+const telemetryHandle = createConfiguredTelemetryHandle({
+  enabled: true,
+  serviceName: "my-agent-service",
+  otlpEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
+  logsExporter: "otlp",
+  metricsExporter: "otlp",
+  tracesExporter: "otlp",
+})
 
 const cline = await ClineCore.create({
   clientName: "my-app",
-  // OpenTelemetry config is picked up from environment
-  // OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, etc.
+  telemetry: telemetryHandle.telemetry,
+})
+
+process.on("SIGTERM", async () => {
+  await cline.dispose("SIGTERM")
+  await telemetryHandle.dispose()
+  process.exit(0)
 })
 ```
 
@@ -239,9 +253,11 @@ See `../scheduling/REFERENCE.md` for recurring agent tasks.
 
 ## Retry and Resilience
 
-- Tool `execute` functions support `retryable: true` (default) and `maxRetries: 3` (default)
+- `createTool()` stores `retryable` and `maxRetries` metadata, but the direct Agent runtime does not automatically retry failed custom tool executions today
+- Built-in ClineCore tools and provider handlers have their own timeout and retry behavior where implemented
+- Implement retries inside custom tool `execute` functions when the operation is idempotent
 - Implement provider-level retries or fallback model selection in your host when your reliability target requires it
-- Use `timeoutMs` on tools to prevent hanging
+- Use `context.signal` and an in-tool timeout for long-running custom tools
 - Monitor `mistake_limit` finish reason to detect systematic tool failures
 
 ## See Also
