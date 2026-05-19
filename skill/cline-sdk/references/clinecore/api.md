@@ -315,20 +315,26 @@ Control tool access at the session level:
 ```typescript
 const session = await cline.start({
   prompt: "Review the code",
-  config: { ... },
+  config: {
+    ...config,
+    toolPolicies: {
+      editor: { enabled: false },
+    },
+  },
   toolPolicies: {
     read_files: { autoApprove: true },
     run_commands: { autoApprove: false },
-    editor: { enabled: false },
   },
 })
 ```
+
+Use `config.toolPolicies` when disabled tools should be removed before the model sees them. Use top-level `toolPolicies` for per-session execution approval and blocking.
 
 ### ToolPolicy
 
 ```typescript
 interface ToolPolicy {
-  enabled?: boolean       // false = tool is hidden from the model
+  enabled?: boolean       // false = blocked; in ClineCore config, also removed before model requests
   autoApprove?: boolean   // false = requires approval callback
 }
 ```
@@ -359,13 +365,13 @@ const cline = await ClineCore.create({
 })
 
 // Access automation methods
-cline.automation.start()
-cline.automation.stop()
-cline.automation.reconcileNow()
+await cline.automation.start()
+await cline.automation.reconcileNow()
 cline.automation.ingestEvent(event)
 cline.automation.listEvents()
 cline.automation.listSpecs()
 cline.automation.listRuns()
+await cline.automation.stop()
 ```
 
 ## Settings API

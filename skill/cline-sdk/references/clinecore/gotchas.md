@@ -20,11 +20,11 @@ ClineCore and `@cline/core` require Node.js 22 or later. If you're on an older v
 ## Session Config vs Global Config
 
 Tool policies can be set at two levels:
-- Global: in `ClineCore.create({ toolPolicies })` -- applies to all sessions
-- Per-session: in `cline.start({ toolPolicies })` -- overrides global for that session
-- Session config: in `cline.start({ config: { toolPolicies } })` -- also filters disabled built-in tools before the model sees them
+- Global execution policy: in `ClineCore.create({ toolPolicies })` applies to all sessions
+- Per-session execution policy: in `cline.start({ toolPolicies })` overrides global approval and blocking for that session
+- Session tool-list policy: in `cline.start({ config: { toolPolicies } })` filters disabled built-in and extension tools before the model sees them
 
-Per-session policies take precedence.
+For hiding a tool from model requests, use `config.toolPolicies`. For approval or blocking at execution time, use global or top-level start policies.
 
 ## enableTools Must Be Explicit
 

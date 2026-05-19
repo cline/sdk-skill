@@ -297,6 +297,7 @@ The CLI scans these directories on startup:
 
 - `<workspace>/.cline/plugins/` -- project-scoped plugins.
 - `~/.cline/plugins/` -- user-scoped plugins.
+- `~/Documents/Cline/Plugins/` -- user-scoped plugins in the documents location.
 
 Drop a `.ts` or `.js` file in, run `cline`, done:
 
@@ -359,6 +360,10 @@ import { type AgentPlugin, ClineCore, createTool } from "@cline/sdk"
 
 let sessionRoot: string | undefined
 
+interface DoThingInput {
+  target: string
+}
+
 const plugin: AgentPlugin = {
   name: "my-plugin",
   manifest: {
@@ -377,8 +382,8 @@ const plugin: AgentPlugin = {
           properties: { target: { type: "string" } },
           required: ["target"],
         },
-        async execute(input) {
-          const { target } = input as { target: string }
+        async execute(input: DoThingInput) {
+          const { target } = input
           return { ok: true, target, root: sessionRoot }
         },
       }),
@@ -484,7 +489,7 @@ Dependencies under the `@cline/` scope are provided by the host runtime. The ins
 Key fields:
 
 - `type: "module"` -- required. Cline plugins are ES modules.
-- `cline.plugins` -- the discovery contract. Array of entries, each with `paths` (entry files) and `capabilities` (pre-declared, validated before importing).
+- `cline.plugins` -- the discovery contract. Array of entries with `paths` pointing at entry files. The exported plugin object's own `manifest.capabilities` is still the runtime source of truth.
 - `peerDependencies` for the `@cline/*` package your plugin imports -- the host already provides it. Marking it optional lets you typecheck in isolation.
 
 ### Bundling Assets

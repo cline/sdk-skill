@@ -34,11 +34,11 @@ interface AgentRuntimeConfigWithProvider {
 
   systemPrompt?: string
   modelOptions?: Record<string, unknown>
-  tools?: AgentTool[]
-  initialMessages?: AgentMessage[]
+  tools?: readonly AgentTool[]
+  initialMessages?: readonly AgentMessage[]
   toolPolicies?: Record<string, ToolPolicy>
   hooks?: Partial<AgentRuntimeHooks>
-  plugins?: AgentRuntimePlugin[]       // from @cline/shared, or use structural typing
+  plugins?: readonly AgentRuntimePlugin[]  // use structural typing; not re-exported by @cline/sdk
   logger?: BasicLogger
   telemetry?: ITelemetryService
   maxIterations?: number
@@ -55,11 +55,11 @@ interface AgentRuntimeConfigWithModel {
 
   systemPrompt?: string
   modelOptions?: Record<string, unknown>
-  tools?: AgentTool[]
-  initialMessages?: AgentMessage[]
+  tools?: readonly AgentTool[]
+  initialMessages?: readonly AgentMessage[]
   toolPolicies?: Record<string, ToolPolicy>
   hooks?: Partial<AgentRuntimeHooks>
-  plugins?: AgentRuntimePlugin[]       // from @cline/shared, or use structural typing
+  plugins?: readonly AgentRuntimePlugin[]  // use structural typing; not re-exported by @cline/sdk
   logger?: BasicLogger
   telemetry?: ITelemetryService
   maxIterations?: number
@@ -195,8 +195,8 @@ interface AgentMessage {
   metrics?: {
     inputTokens: number
     outputTokens: number
-    cacheReadTokens?: number
-    cacheWriteTokens?: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
     cost?: number
   }
 }

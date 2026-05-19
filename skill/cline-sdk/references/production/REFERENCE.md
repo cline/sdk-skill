@@ -98,16 +98,29 @@ agent.subscribe((event) => {
 The SDK can emit telemetry through an injected `ITelemetryService`. `ClineCore.create()` does not create OpenTelemetry telemetry by itself; construct a telemetry service and pass it in:
 
 ```typescript
-import { ClineCore, createConfiguredTelemetryHandle } from "@cline/sdk"
+import {
+  ClineCore,
+  createClineTelemetryServiceConfig,
+  createConfiguredTelemetryHandle,
+} from "@cline/sdk"
 
-const telemetryHandle = createConfiguredTelemetryHandle({
+const telemetryConfig = createClineTelemetryServiceConfig({
   enabled: true,
   serviceName: "my-agent-service",
   otlpEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
   logsExporter: "otlp",
   metricsExporter: "otlp",
   tracesExporter: "otlp",
+  metadata: {
+    extension_version: "1.0.0",
+    cline_type: "sdk-app",
+    platform: process.platform,
+    platform_version: process.version,
+    os_type: process.platform,
+    os_version: process.version,
+  },
 })
+const telemetryHandle = createConfiguredTelemetryHandle(telemetryConfig)
 
 const cline = await ClineCore.create({
   clientName: "my-app",
@@ -197,17 +210,25 @@ execute: async (input) => {
 
 ### Tool Policy Hardening
 
-Disable tools you don't need and require approval for dangerous ones:
+Disable tools you don't need before model requests and require approval for dangerous ones:
 
 ```typescript
-toolPolicies: {
-  read_files: { autoApprove: true },
-  search_codebase: { autoApprove: true },
-  run_commands: { autoApprove: false },     // require approval
-  editor: { autoApprove: false },
-  apply_patch: { autoApprove: false },
-  fetch_web_content: { enabled: false },    // disable entirely
-}
+await cline.start({
+  prompt: "...",
+  config: {
+    ...config,
+    toolPolicies: {
+      fetch_web_content: { enabled: false },    // removed before model requests
+    },
+  },
+  toolPolicies: {
+    read_files: { autoApprove: true },
+    search_codebase: { autoApprove: true },
+    run_commands: { autoApprove: false },       // require approval
+    editor: { autoApprove: false },
+    apply_patch: { autoApprove: false },
+  },
+})
 ```
 
 ## Deployment Patterns

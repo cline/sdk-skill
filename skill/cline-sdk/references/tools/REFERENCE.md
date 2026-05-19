@@ -9,6 +9,11 @@ Use `createTool()` from `@cline/sdk` (or `@cline/shared`):
 ```typescript
 import { createTool } from "@cline/sdk"
 
+interface SearchIssuesInput {
+  query: string
+  state?: "open" | "closed" | "all"
+}
+
 const myTool = createTool({
   name: "search_issues",
   description: "Search GitHub issues by query. Returns up to 10 results.",
@@ -20,7 +25,7 @@ const myTool = createTool({
     },
     required: ["query"],
   },
-  execute: async (input) => {
+  execute: async (input: SearchIssuesInput) => {
     const issues = await github.searchIssues(input.query, input.state)
     return { issues, count: issues.length }
   },
@@ -145,14 +150,14 @@ The model sees the tool result and the run ends. For direct `Agent`, inspect `re
 
 ## Built-in Tools (ClineCore Only)
 
-When using `ClineCore` with `enableTools: true`, these tools are available automatically:
+When using `ClineCore` with `enableTools: true`, the built-in suite can include these tools. The exact set depends on mode, tool routing rules, available configured skills, `enableSpawnAgent`, `enableAgentTeams`, MCP settings, and policies.
 
 | Tool | Name | What It Does |
 |------|------|-------------|
 | Shell | `run_commands` | Execute shell commands in the session workspace |
 | Editor | `editor` | Create and edit files |
 | Read | `read_files` | Read file contents |
-| Patch | `apply_patch` | Apply unified diffs to files |
+| Patch | `apply_patch` | Apply unified diffs to files when the patch tool is selected instead of `editor` |
 | Search | `search_codebase` | Search file contents and directory structure |
 | Web | `fetch_web_content` | Fetch web content via HTTP |
 | Skills | `skills` | Invoke configured skills |
@@ -166,20 +171,31 @@ Built-in tools respect the `cwd` setting in `CoreSessionConfig`.
 Control which tools are available and whether they require approval:
 
 ```typescript
-// In Agent config
+// In direct Agent config, policies are checked at execution time
 const agent = new Agent({
   tools: [toolA, toolB, toolC],
   toolPolicies: {
     tool_a: { autoApprove: true },    // runs without asking
     tool_b: { autoApprove: false },   // requires approval
-    tool_c: { enabled: false },       // hidden from model
+    tool_c: { enabled: false },       // blocks execution if requested
   },
 })
 
-// In ClineCore session
+// In ClineCore config, disabled tools are removed before model requests
 await cline.start({
   prompt: "...",
-  config: { ... },
+  config: {
+    ...config,
+    toolPolicies: {
+      editor: { enabled: false },
+    },
+  },
+})
+
+// At the top level, policies affect execution approval/blocking for the session
+await cline.start({
+  prompt: "...",
+  config: { ...config },
   toolPolicies: {
     run_commands: { autoApprove: true },
     editor: { autoApprove: false },
@@ -187,7 +203,7 @@ await cline.start({
 })
 ```
 
-For `ClineCore`, prefer `config.toolPolicies` when you want disabled built-in tools removed before the model sees the tool list. Top-level `cline.start({ toolPolicies })` still affects execution approval, but it is applied later.
+For `ClineCore`, prefer `config.toolPolicies` when you want disabled built-in or extension tools removed before the model sees the tool list. Top-level `cline.start({ toolPolicies })` still affects execution approval and blocking, but it is applied later. Direct `Agent` policies are also checked at execution time after the model has already seen the tool definitions.
 
 ### Policy Options
 
@@ -195,7 +211,7 @@ For `ClineCore`, prefer `config.toolPolicies` when you want disabled built-in to
 |--------|--------|
 | `{ autoApprove: true }` | Tool runs without approval |
 | `{ autoApprove: false }` | Triggers approval callback before running |
-| `{ enabled: false }` | Tool is hidden from the model entirely |
+| `{ enabled: false }` | Blocks execution in direct `Agent` and top-level ClineCore policies. In ClineCore `config.toolPolicies`, also removes the tool before model requests |
 | No policy set | Defaults to enabled and auto-approved |
 
 ## Abort Signal in Long-Running Tools

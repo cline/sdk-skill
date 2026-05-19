@@ -46,7 +46,7 @@ Every `cline.start()` call creates a session with a unique ID. Sessions persist 
 
 ### Built-in Tools
 
-ClineCore provides the default tool suite when `enableTools: true`:
+ClineCore provides the default tool suite when `enableTools: true`. The exact enabled set depends on mode, tool routing, available configured skills, MCP settings, and policies:
 
 | Tool | Description |
 |------|-------------|
