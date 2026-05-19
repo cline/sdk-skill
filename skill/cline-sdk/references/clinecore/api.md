@@ -72,13 +72,14 @@ interface ClineCoreStartInput {
 
 ```typescript
 interface CoreSessionConfig {
-  cwd?: string                          // working directory
+  cwd: string                           // working directory
   providerId: string                    // LLM provider
   modelId: string                       // model identifier
   apiKey?: string                       // provider API key
-  systemPrompt?: string                 // custom system prompt
-  tools?: readonly AgentTool[]          // additional custom tools
-  enableTools?: boolean                 // enable built-in tools
+  systemPrompt: string                  // custom system prompt
+  extraTools?: AgentTool[]              // additional custom tools
+  toolPolicies?: Record<string, ToolPolicy>
+  enableTools: boolean                  // enable built-in tools
   hooks?: Partial<AgentRuntimeHooks>    // runtime hooks
   extensions?: AgentPlugin[]            // plugins loaded inline
   pluginPaths?: string[]                // paths to plugin packages
@@ -136,6 +137,23 @@ type CoreSessionEvent =
   | { type: "team_progress"; payload: SessionTeamProgressEvent }
   | { type: "status"; payload: { sessionId: string, status: string } }
   | { type: "hook"; payload: SessionToolEvent }
+```
+
+For direct `ClineCore` subscribers, render text, reasoning, and tool activity from the `agent_event` branch. `chunk` payloads are raw transport chunks:
+
+```typescript
+interface SessionChunkEvent {
+  sessionId: string
+  stream: "stdout" | "stderr" | "agent"
+  chunk: string
+  ts: number
+}
+
+interface SessionEndedEvent {
+  sessionId: string
+  reason: string
+  ts: number
+}
 ```
 
 ## Session Management
@@ -232,11 +250,13 @@ Control tool access at the session level:
 ```typescript
 const session = await cline.start({
   prompt: "Review the code",
-  config: { ... },
-  toolPolicies: {
-    read_files: { autoApprove: true },
-    bash: { autoApprove: false },
-    editor: { enabled: false },
+  config: {
+    ...config,
+    toolPolicies: {
+      read_files: { autoApprove: true },
+      run_commands: { autoApprove: false },
+      editor: { enabled: false },
+    },
   },
 })
 ```
@@ -292,7 +312,7 @@ cline.automation.listRuns()
 const settings = await cline.settings.list()
 
 // Toggle tools, plugins, MCP servers
-await cline.settings.toggle({ type: "tool", name: "bash", enabled: true })
+await cline.settings.toggle({ type: "tool", name: "run_commands", enabled: true })
 ```
 
 ## See Also

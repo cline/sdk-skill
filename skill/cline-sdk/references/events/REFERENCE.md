@@ -7,7 +7,7 @@ The Cline SDK has three event layers. Which one you use depends on whether you'r
 | If you use... | You subscribe with... | You receive... | Text streaming event |
 |---|---|---|---|
 | Standalone `Agent` | `agent.subscribe()` | `AgentRuntimeEvent` | `assistant-text-delta` |
-| `ClineCore` | `cline.subscribe()` | `CoreSessionEvent` | `chunk` (with `payload.type === "text"`) |
+| `ClineCore` | `cline.subscribe()` | `CoreSessionEvent` | `agent_event` with `content_start` text |
 
 These are different event types with different shapes. Do not mix them up.
 
@@ -128,7 +128,7 @@ const agent = new Agent({
 
 ## Layer 2: AgentEvent (ClineCore Internal)
 
-When using `ClineCore`, a `RuntimeEventAdapter` translates Layer 1 events into a legacy format called `AgentEvent`. You do not interact with this layer directly -- it is projected into `CoreSessionEvent` for subscribers. The key mappings:
+When using `ClineCore`, a `RuntimeEventAdapter` translates Layer 1 events into a legacy format called `AgentEvent`. Direct `cline.subscribe()` consumers receive these events inside `CoreSessionEvent` records with `type: "agent_event"`. Render assistant text, reasoning, and tool activity from this structured branch. Treat `chunk` events as raw transport chunks, not as the primary text stream. The key mappings:
 
 | AgentRuntimeEvent (Layer 1) | AgentEvent (Layer 2) |
 |---|---|
@@ -164,19 +164,22 @@ type CoreSessionEvent =
 
 ```typescript
 interface SessionChunkEvent {
-  type: "text" | "reasoning"
-  text: string
   sessionId: string
+  stream: "stdout" | "stderr" | "agent"
+  chunk: string
+  ts: number
 }
 ```
+
+Raw `agent` chunks contain serialized `AgentEvent` envelopes in the current runtime. Prefer the structured `agent_event` branch instead of parsing or printing raw chunks.
 
 ### SessionEndedEvent
 
 ```typescript
 interface SessionEndedEvent {
   sessionId: string
-  finishReason: "completed" | "max_iterations" | "aborted" | "mistake_limit" | "error"
-  result?: AgentResult
+  reason: string
+  ts: number
 }
 ```
 
@@ -185,13 +188,17 @@ interface SessionEndedEvent {
 ```typescript
 cline.subscribe((event) => {
   switch (event.type) {
-    case "chunk":
-      if (event.payload.type === "text") {
-        process.stdout.write(event.payload.text)
+    case "agent_event":
+      if (
+        event.payload.event.type === "content_start" &&
+        event.payload.event.contentType === "text" &&
+        event.payload.event.text
+      ) {
+        process.stdout.write(event.payload.event.text)
       }
       break
     case "ended":
-      console.log(`Finished: ${event.payload.finishReason}`)
+      console.log(`Finished: ${event.payload.reason}`)
       break
   }
 })
@@ -205,7 +212,7 @@ cline.subscribe(handler, { sessionId: "specific-session-id" })
 
 ## Hub Events (Layer 3b)
 
-When ClineCore runs in hub mode (via `backendMode: "hub"` or `"auto"` when a hub is available), events are projected over WebSocket using `HubEventName` types like `assistant.delta`, `iteration.started`, `tool.started`, etc. You do not interact with these directly -- `cline.subscribe()` still gives you `CoreSessionEvent` regardless of backend mode.
+When ClineCore runs in hub mode (via `backendMode: "hub"` or `"auto"` when a hub is available), events are projected over WebSocket using `HubEventName` types like `assistant.delta`, `iteration.started`, `tool.started`, etc. You do not interact with these directly through `cline.subscribe()`, which still gives you `CoreSessionEvent`.
 
 ## Result Type Differences
 
@@ -232,8 +239,34 @@ agent.subscribe((event) => {
 
 ```typescript
 cline.subscribe((event) => {
-  if (event.type === "chunk" && event.payload.type === "text") {
-    process.stdout.write(event.payload.text)
+  if (
+    event.type === "agent_event" &&
+    event.payload.event.type === "content_start" &&
+    event.payload.event.contentType === "text" &&
+    event.payload.event.text
+  ) {
+    process.stdout.write(event.payload.event.text)
+  }
+})
+```
+
+### Tool Call Logging (ClineCore)
+
+```typescript
+cline.subscribe((event) => {
+  if (
+    event.type === "agent_event" &&
+    event.payload.event.type === "content_start" &&
+    event.payload.event.contentType === "tool"
+  ) {
+    console.log(`Tool started: ${event.payload.event.toolName}`)
+  }
+  if (
+    event.type === "agent_event" &&
+    event.payload.event.type === "content_end" &&
+    event.payload.event.contentType === "tool"
+  ) {
+    console.log(`Tool finished: ${event.payload.event.toolName}`)
   }
 })
 ```

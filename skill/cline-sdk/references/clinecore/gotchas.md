@@ -22,12 +22,13 @@ ClineCore and `@cline/core` require Node.js 22 or later. If you're on an older v
 Tool policies can be set at two levels:
 - Global: in `ClineCore.create({ toolPolicies })` -- applies to all sessions
 - Per-session: in `cline.start({ toolPolicies })` -- overrides global for that session
+- Session config: in `cline.start({ config: { toolPolicies } })` -- also filters disabled built-in tools before the model sees them
 
 Per-session policies take precedence.
 
 ## enableTools Must Be Explicit
 
-Built-in tools (bash, editor, read_files, etc.) are not available unless you set `enableTools: true` in the session config:
+Built-in tools (`run_commands`, `editor`, `read_files`, etc.) are not available unless you set `enableTools: true` in the session config:
 
 ```typescript
 await cline.start({
@@ -40,11 +41,11 @@ await cline.start({
 })
 ```
 
-Without this, the agent only has access to custom tools you provide via `config.tools`.
+Without this, the agent only has access to custom tools you provide via `config.extraTools` or `localRuntime.extraTools`.
 
 ## cwd Matters for Built-in Tools
 
-Built-in tools like `bash`, `editor`, and `read_files` operate relative to `config.cwd`. If not set, they use the process working directory. Always set it explicitly for predictable behavior:
+Built-in tools like `run_commands`, `editor`, and `read_files` operate relative to `config.cwd`. If not set, they use the process working directory. Always set it explicitly for predictable behavior:
 
 ```typescript
 config: {

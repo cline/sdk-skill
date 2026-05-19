@@ -142,12 +142,12 @@ When using `ClineCore` with `enableTools: true`, these tools are available autom
 
 | Tool | Name | What It Does |
 |------|------|-------------|
-| Shell | `bash` | Execute shell commands in the session workspace |
+| Shell | `run_commands` | Execute shell commands in the session workspace |
 | Editor | `editor` | Create and edit files |
 | Read | `read_files` | Read file contents |
 | Patch | `apply_patch` | Apply unified diffs to files |
-| Search | `search` | Search file contents and directory structure |
-| Web | `fetch_web` | Fetch web content via HTTP |
+| Search | `search_codebase` | Search file contents and directory structure |
+| Web | `fetch_web_content` | Fetch web content via HTTP |
 
 Built-in tools respect the `cwd` setting in `CoreSessionConfig`.
 
@@ -169,13 +169,17 @@ const agent = new Agent({
 // In ClineCore session
 await cline.start({
   prompt: "...",
-  config: { ... },
-  toolPolicies: {
-    bash: { autoApprove: true },
-    editor: { autoApprove: false },
+  config: {
+    ...config,
+    toolPolicies: {
+      run_commands: { autoApprove: true },
+      editor: { autoApprove: false },
+    },
   },
 })
 ```
+
+For `ClineCore`, prefer `config.toolPolicies` when you want disabled built-in tools removed before the model sees the tool list. Top-level `cline.start({ toolPolicies })` still affects execution approval, but it is applied later.
 
 ### Policy Options
 
