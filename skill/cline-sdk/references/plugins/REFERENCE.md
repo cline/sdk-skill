@@ -1,6 +1,6 @@
 # Plugins
 
-A Cline plugin is a TypeScript module that extends any agent built on the Cline SDK. The same plugin runs in the Cline CLI, VS Code and JetBrains extensions, and any custom app built with `@cline/sdk`.
+A ClineCore plugin is a TypeScript module that extends hosts built on `@cline/core` or `@cline/sdk`. The same plugin shape is used by the Cline CLI, editor extensions, and custom apps that load plugins through `ClineCore`.
 
 A plugin can:
 
@@ -14,21 +14,23 @@ A plugin ships in one of two shapes:
 1. Single-file plugin -- one `.ts` file that exports a default plugin object. Drop it in a discovery folder and it loads.
 2. Plugin package -- a directory with `package.json`, npm dependencies, and optionally bundled assets. Installable via `cline plugin install`.
 
-Both shapes use the same plugin API.
+Both shapes use the same ClineCore plugin API.
+
+Direct `Agent` has a different, smaller runtime plugin shape: `plugins` entries can return `{ tools, hooks }` from `setup(context)`, but they do not use `manifest` or `setup(api, ctx)`. Use the `AgentPlugin` examples in this file with ClineCore `extensions` or `pluginPaths`, not with direct `Agent.plugins`.
 
 ## The Mental Model
 
 When the host starts a session, it builds a registry of plugins and runs four phases:
 
 1. resolve -- collect the plugin objects.
-2. validate -- check each plugin's `manifest`. Capabilities must be non-empty; declared hook stages must have matching handlers; if `hooks` is present, `"hooks"` must be in `capabilities`.
+2. validate -- check each plugin's `manifest`. Capabilities must be non-empty, unsupported capability names fail, and if `hooks` is present, `"hooks"` must be in `capabilities`.
 3. setup -- call each plugin's `setup(api, ctx)` once. This is where you `registerTool`, `registerCommand`, etc.
 4. activate -- registry is frozen, the agent loop starts, and your hooks/tools are live.
 
 Two invariants the registry enforces:
 
-- Every contribution requires a matching capability. Calling `api.registerRule(...)` without `"rules"` in `manifest.capabilities` throws.
-- Capabilities and handlers must agree. Declaring `"hooks"` without a `hooks` object, or vice versa, fails validation.
+- Declare the matching capability for every contribution. The registry currently throws for missing `"rules"` and `"automationEvents"` during those registrations, and it throws when a plugin defines `hooks` without the `"hooks"` capability. Other contribution capability checks may be enforced by host discovery and plugin metadata, so keep the manifest accurate.
+- If a plugin defines runtime hooks, `"hooks"` must be in `manifest.capabilities`. Declaring `"hooks"` without a `hooks` object is allowed but unnecessary.
 
 After validation, registration is one-shot -- no dynamic register/unregister during the session.
 
@@ -85,7 +87,7 @@ manifest: {
 | `"commands"` | `api.registerCommand()` (slash commands in chat surfaces) |
 | `"rules"` | `api.registerRule()` (string injected into the system prompt) |
 | `"messageBuilders"` | `api.registerMessageBuilder()` (rewrites provider-bound messages) |
-| `"providers"` | `api.registerProvider()` (custom model provider) |
+| `"providers"` | `api.registerProvider()` (provider contribution metadata) |
 | `"automationEvents"` | `api.registerAutomationEventType()` and `ctx.automation?.ingestEvent()` |
 | `"hooks"` | The runtime `hooks` object on the plugin (lifecycle callbacks) |
 
@@ -97,14 +99,14 @@ You declare any combination -- most real plugins need 1-3 capabilities.
 
 ### The api Object
 
-Each `register*` method requires the matching capability in your manifest:
+Each `register*` method should have the matching capability in your manifest:
 
 ```typescript
-api.registerTool(tool)                              // requires "tools"
-api.registerCommand({ name, description, handler }) // requires "commands"
+api.registerTool(tool)                              // declare "tools"
+api.registerCommand({ name, description, handler }) // declare "commands"
 api.registerRule({ id, content, source })            // requires "rules"
-api.registerMessageBuilder({ name, build })          // requires "messageBuilders"
-api.registerProvider({ name, description })          // requires "providers"
+api.registerMessageBuilder({ name, build })          // declare "messageBuilders"
+api.registerProvider({ name, description, metadata }) // declare "providers"
 api.registerAutomationEventType({ eventType, source }) // requires "automationEvents"
 ```
 
@@ -295,6 +297,7 @@ The CLI scans these directories on startup:
 
 - `<workspace>/.cline/plugins/` -- project-scoped plugins.
 - `~/.cline/plugins/` -- user-scoped plugins.
+- `~/Documents/Cline/Plugins/` -- user-scoped plugins in the documents location.
 
 Drop a `.ts` or `.js` file in, run `cline`, done:
 
@@ -320,11 +323,10 @@ await host.start({
     apiKey: process.env.ANTHROPIC_API_KEY ?? "",
     cwd: process.cwd(),
     enableTools: true,
+    enableSpawnAgent: false,
+    enableAgentTeams: false,
     systemPrompt: "You are a helpful assistant.",
     extensions: [plugin],
-    extensionContext: {
-      workspace: { rootPath: process.cwd(), cwd: process.cwd() },
-    },
   },
   prompt: "...",
   interactive: false,
@@ -358,6 +360,10 @@ import { type AgentPlugin, ClineCore, createTool } from "@cline/sdk"
 
 let sessionRoot: string | undefined
 
+interface DoThingInput {
+  target: string
+}
+
 const plugin: AgentPlugin = {
   name: "my-plugin",
   manifest: {
@@ -376,8 +382,8 @@ const plugin: AgentPlugin = {
           properties: { target: { type: "string" } },
           required: ["target"],
         },
-        async execute(input) {
-          const { target } = input as { target: string }
+        async execute(input: DoThingInput) {
+          const { target } = input
           return { ok: true, target, root: sessionRoot }
         },
       }),
@@ -405,11 +411,10 @@ async function runDemo(): Promise<void> {
         apiKey: process.env.ANTHROPIC_API_KEY ?? "",
         cwd: process.cwd(),
         enableTools: true,
+        enableSpawnAgent: false,
+        enableAgentTeams: false,
         systemPrompt: "You are a helpful assistant. Use tools when needed.",
         extensions: [plugin],
-        extensionContext: {
-          workspace: { rootPath: process.cwd(), cwd: process.cwd() },
-        },
       },
       prompt: "Use do_thing on the target 'world'.",
       interactive: false,
@@ -484,8 +489,8 @@ Dependencies under the `@cline/` scope are provided by the host runtime. The ins
 Key fields:
 
 - `type: "module"` -- required. Cline plugins are ES modules.
-- `cline.plugins` -- the discovery contract. Array of entries, each with `paths` (entry files) and `capabilities` (pre-declared, validated before importing).
-- `peerDependencies` for imported `@cline/*` packages -- the host already provides them. Marking them optional lets you typecheck in isolation.
+- `cline.plugins` -- the discovery contract. Array of entries with `paths` pointing at entry files. The exported plugin object's own `manifest.capabilities` is still the runtime source of truth.
+- `peerDependencies` for the `@cline/*` package your plugin imports -- the host already provides it. Marking it optional lets you typecheck in isolation.
 
 ### Bundling Assets
 
@@ -540,7 +545,9 @@ The plugin object is plain data. Drive `setup()` against a minimal context and e
 import plugin from "../my-plugin"
 
 const tools: unknown[] = []
-const api = {
+type PluginSetup = NonNullable<typeof plugin.setup>
+
+const api: Parameters<PluginSetup>[0] = {
   registerTool: (t: unknown) => tools.push(t),
   registerCommand: () => {},
   registerRule: () => {},
@@ -548,7 +555,7 @@ const api = {
   registerProvider: () => {},
   registerAutomationEventType: () => {},
 }
-await plugin.setup?.(api as never, {
+await plugin.setup?.(api, {
   workspaceInfo: { rootPath: "/tmp/fake-workspace" },
 })
 
@@ -584,12 +591,13 @@ If the plugin fails validation or setup, the CLI prints a clear error and contin
 
 - "capabilities must be a non-empty array" -- you forgot `manifest.capabilities`, or it's `[]`.
 - "registerRule requires the 'rules' capability" -- capability/handler drift. Add `"rules"` to capabilities, or stop calling `registerRule`.
-- Tool not visible to the model -- check `enableTools: true` on the session config, and that you're declaring `"tools"` in capabilities.
-- `ctx.workspaceInfo` is undefined in SDK tests -- the host didn't pass `extensionContext.workspace`. In SDK code, set it explicitly (see the ClineCore loading example above).
+- "registerAutomationEventType requires the 'automationEvents' capability" -- add `"automationEvents"` to capabilities, or stop registering automation event types.
+- Plugin tool not visible to the model -- check that the plugin declares `"tools"` before calling `api.registerTool()`, that the plugin loaded successfully, and that global tool settings have not disabled the tool. `enableTools` controls the default built-in suite, not whether plugin tools can be registered.
+- `ctx.workspaceInfo` is undefined in unit tests -- your test did not pass setup context. In ClineCore sessions, pass `cwd` or `workspaceRoot` so core can derive workspace metadata.
 - State leaking across sessions -- module-level variables are shared across sessions in the same process. Key by `ctx.session?.sessionId` if your host runs multiple sessions concurrently.
 - `afterRun` firing on aborts -- guard with `if (result.status !== "completed") return`.
 - Heavy work in `setup()` -- `setup()` blocks session start. Defer expensive work into the first tool call or `beforeRun`.
-- Importing host internals -- only import from public `@cline/*` SDK packages, usually `@cline/sdk`. Reaching into host-specific packages (e.g. CLI internals) will break in non-CLI hosts.
+- Importing host internals -- import public SDK APIs from `@cline/sdk` or `@cline/core`. Reaching into host-specific packages, such as CLI internals, will break in non-CLI hosts.
 - Sandboxed plugins and `telemetry` -- telemetry is process-local. Feature-detect `ctx.telemetry` and expect it to be undefined in sandboxed plugin processes.
 - Resolving bundled assets -- use `import.meta.url` + `fileURLToPath` to find files inside your package; never `process.cwd()`. For workspace paths, do the opposite: use `ctx.workspaceInfo?.rootPath`, never `import.meta.url`.
 - Plugin name collisions -- `name` must be unique within a session. If two plugins share a name, validation fails. Namespace by package (`my-org-redactor`, not `redactor`).
@@ -602,7 +610,7 @@ If the plugin fails validation or setup, the CLI prints a clear error and contin
 | Add a slash command in chat surfaces | `registerCommand` |
 | Inject text into the system prompt | `registerRule` |
 | Rewrite messages before they hit the provider | `registerMessageBuilder` |
-| Add a custom model provider | `registerProvider` |
+| Add provider contribution metadata | `registerProvider` |
 | Emit normalized cron/webhook events | `registerAutomationEventType` + `ctx.automation` |
 | Observe or steer the agent loop | `hooks.*` |
 | Block a dangerous tool call | `hooks.beforeTool` returning `{ stop: true }` |
@@ -623,7 +631,7 @@ If the plugin fails validation or setup, the CLI prints a clear error and contin
 - Tool inputs have JSON Schema with `required` set.
 - `afterRun` handlers gate on `result.status === "completed"` if they only want successes.
 - State that must not leak between concurrent sessions is keyed by `ctx.session?.sessionId`.
-- (Package) `package.json` has `type: "module"`, `cline.plugins`, and imported `@cline/*` packages as optional peer deps.
+- (Package) `package.json` has `type: "module"`, `cline.plugins`, and whichever `@cline/*` package you import as an optional peer dependency.
 - (Package) Bundled assets resolved via `import.meta.url`, not `process.cwd()`.
 - Smoke test: drop the plugin into `.cline/plugins/` (or `cline plugin install`), run `cline -i "..."`, watch it work.
 

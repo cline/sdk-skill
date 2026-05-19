@@ -37,25 +37,25 @@ Emitted by the `Agent` class via `agent.subscribe()`. This is what you get when 
 { type: "assistant-text-delta", snapshot, iteration: number, text: string, accumulatedText: string }
 
 // Streaming reasoning delta (when model uses extended thinking)
-{ type: "assistant-reasoning-delta", snapshot, iteration: number, text: string }
+{ type: "assistant-reasoning-delta", snapshot, iteration: number, text: string, accumulatedText: string, redacted?: boolean, metadata?: unknown }
 
 // Complete assistant message after model finishes
-{ type: "assistant-message", snapshot, iteration: number, message: AgentMessage, finishReason: string }
+{ type: "assistant-message", snapshot, iteration: number, message: AgentMessage, finishReason: "stop" | "tool-calls" | "max-tokens" | "aborted" | "error" }
 ```
 
 ### Messages
 
 ```typescript
-// Fired when any message (user or assistant) is added to conversation history
+// Fired when any user, assistant, or tool message is added to conversation history
 { type: "message-added", snapshot, message: AgentMessage }
 ```
 
 ### Tool Events
 
 ```typescript
-{ type: "tool-started", snapshot, toolCall: { toolName: string, toolCallId: string, input: unknown } }
-{ type: "tool-updated", snapshot, toolCall: { toolName: string, toolCallId: string }, update: string }
-{ type: "tool-finished", snapshot, toolCall: { toolName: string, toolCallId: string }, message: AgentMessage }
+{ type: "tool-started", snapshot, iteration: number, toolCall: { toolName: string, toolCallId: string, input: unknown } }
+{ type: "tool-updated", snapshot, iteration: number, toolCall: { toolName: string, toolCallId: string }, update: unknown }
+{ type: "tool-finished", snapshot, iteration: number, toolCall: { toolName: string, toolCallId: string }, message: AgentMessage }
 ```
 
 ### Usage
@@ -67,8 +67,8 @@ Emitted by the `Agent` class via `agent.subscribe()`. This is what you get when 
   usage: {
     inputTokens: number,
     outputTokens: number,
-    cacheReadTokens?: number,
-    cacheWriteTokens?: number,
+    cacheReadTokens: number,
+    cacheWriteTokens: number,
     totalCost?: number,
   },
 }
@@ -153,9 +153,12 @@ Emitted by `ClineCore` via `cline.subscribe()`. These are higher-level session e
 ```typescript
 type CoreSessionEvent =
   | { type: "chunk"; payload: SessionChunkEvent }
-  | { type: "agent_event"; payload: { sessionId: string, event: AgentEvent } }
+  | { type: "agent_event"; payload: { sessionId: string, event: AgentEvent, teamAgentId?: string, teamRole?: "lead" | "teammate" } }
   | { type: "ended"; payload: SessionEndedEvent }
   | { type: "team_progress"; payload: SessionTeamProgressEvent }
+  | { type: "pending_prompts"; payload: SessionPendingPromptsEvent }
+  | { type: "pending_prompt_submitted"; payload: SessionPendingPromptSubmittedEvent }
+  | { type: "session_snapshot"; payload: SessionSnapshotEvent }
   | { type: "status"; payload: { sessionId: string, status: string } }
   | { type: "hook"; payload: SessionToolEvent }
 ```

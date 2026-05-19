@@ -20,11 +20,11 @@ ClineCore and `@cline/core` require Node.js 22 or later. If you're on an older v
 ## Session Config vs Global Config
 
 Tool policies can be set at two levels:
-- Global: in `ClineCore.create({ toolPolicies })` -- applies to all sessions
-- Per-session: in `cline.start({ toolPolicies })` -- overrides global for that session
-- Session config: in `cline.start({ config: { toolPolicies } })` -- also filters disabled built-in tools before the model sees them
+- Global execution policy: in `ClineCore.create({ toolPolicies })` applies to all sessions
+- Per-session execution policy: in `cline.start({ toolPolicies })` overrides global approval and blocking for that session
+- Session tool-list policy: in `cline.start({ config: { toolPolicies } })` filters disabled built-in and extension tools before the model sees them
 
-Per-session policies take precedence.
+For hiding a tool from model requests, use `config.toolPolicies`. For approval or blocking at execution time, use global or top-level start policies.
 
 ## enableTools Must Be Explicit
 
@@ -36,12 +36,16 @@ await cline.start({
   config: {
     providerId: "anthropic",
     modelId: "claude-sonnet-4-6",
+    cwd: process.cwd(),
+    systemPrompt: "You are a helpful coding agent.",
     enableTools: true,  // required for built-in tools
+    enableSpawnAgent: false,
+    enableAgentTeams: false,
   },
 })
 ```
 
-Without this, the agent only has access to custom tools you provide via `config.extraTools` or `localRuntime.extraTools`.
+Without this, the agent only has access to custom tools you provide via `config.extraTools` and tools contributed by enabled plugins.
 
 ## cwd Matters for Built-in Tools
 
@@ -65,7 +69,7 @@ With `backendMode: "auto"`, the first session may be slow if a hub daemon needs 
 
 Sessions are stored at `~/.cline/data/sessions/`. This includes:
 - `sessions.db` - SQLite database with session metadata
-- `[session-id].json` - Individual message history files
+- per-session manifest and message artifacts. Use `manifestPath` and `messagesPath` returned from `cline.start()` instead of assuming file names.
 
 If you're running in a container or ephemeral environment, these paths may not persist across restarts.
 
@@ -91,22 +95,21 @@ If a plugin isn't loading, verify:
 - Every `api.register*` call in `setup()` has a matching capability declared
 - If `hooks` is present on the plugin, `"hooks"` is in `capabilities`
 
-## extensionContext.workspace Is Required for Plugins
+## Workspace Context for Plugins
 
-If your plugins use `ctx.workspaceInfo` (e.g., to resolve workspace paths), you must set `extensionContext.workspace` in the session config. Without it, `ctx.workspaceInfo` is undefined:
+If your plugins use `ctx.workspaceInfo`, pass `cwd` or `workspaceRoot` in the session config. ClineCore derives structured workspace metadata from those fields and forwards it to plugin setup:
 
 ```typescript
 await cline.start({
   config: {
+    ...baseConfig,
+    cwd: process.cwd(),
     extensions: [myPlugin],
-    extensionContext: {
-      workspace: { rootPath: process.cwd(), cwd: process.cwd() },
-    },
   },
 })
 ```
 
-The CLI sets this automatically, but SDK consumers must set it explicitly.
+The CLI sets workspace fields automatically, but SDK consumers should pass them explicitly.
 
 ## send() Requires an Active Session
 
@@ -127,12 +130,12 @@ if (session.result) {
 
 ## Compaction and Long Sessions
 
-For long-running sessions, message history grows and eventually exceeds the model's context window. ClineCore handles this via compaction, which summarizes older messages. Configure it via `compactionConfig`:
+For long-running sessions, message history grows and eventually exceeds the model's context window. ClineCore handles this via compaction, which summarizes older messages. Configure it via `compaction`:
 
 ```typescript
 config: {
-  compactionConfig: {
-    strategy: "summarize",
+  compaction: {
+    strategy: "basic",
     // ...
   },
 }

@@ -5,16 +5,18 @@
 ```typescript
 import { Agent } from "@cline/sdk"
 
-const agent = new Agent(config: AgentRuntimeConfig)
+const agent = new Agent(config)
 ```
 
-Also available via factory function:
+Also available through the lower-level factory re-export:
 
 ```typescript
-import { createAgent } from "@cline/sdk"
+import { createAgentRuntime } from "@cline/sdk"
 
-const agent = createAgent(config)
+const agent = createAgentRuntime(config)
 ```
+
+`AgentRuntime` and `createAgent` are exported by `@cline/agents` directly, not by `@cline/sdk`. Runtime event and snapshot types are exported by `@cline/agents`; some plugin helper types live in `@cline/shared`.
 
 ## AgentRuntimeConfig
 
@@ -24,18 +26,24 @@ Two config forms exist as a discriminated union:
 
 ```typescript
 interface AgentRuntimeConfigWithProvider {
-  providerId: string          // e.g. "anthropic", "openai", "gemini"
-  modelId: string             // e.g. "claude-sonnet-4-6", "gpt-5.5"
+  providerId: string          // e.g. "anthropic", "openai-native", "gemini"
+  modelId: string             // provider model id
   apiKey?: string             // provider API key
   baseUrl?: string            // custom endpoint
   headers?: Record<string, string>
 
   systemPrompt?: string
-  tools?: AgentTool[]
-  initialMessages?: AgentMessage[]
+  modelOptions?: Record<string, unknown>
+  tools?: readonly AgentTool[]
+  initialMessages?: readonly AgentMessage[]
   toolPolicies?: Record<string, ToolPolicy>
   hooks?: Partial<AgentRuntimeHooks>
-  plugins?: AgentPlugin[]
+  plugins?: readonly AgentRuntimePlugin[]  // use structural typing; not re-exported by @cline/sdk
+  logger?: BasicLogger
+  telemetry?: ITelemetryService
+  maxIterations?: number
+  toolExecution?: "sequential" | "parallel"
+  requestToolApproval?: (request: ToolApprovalRequest) => Promise<ToolApprovalResult> | ToolApprovalResult
 }
 ```
 
@@ -46,15 +54,46 @@ interface AgentRuntimeConfigWithModel {
   model: AgentModel            // pre-built model from gateway
 
   systemPrompt?: string
-  tools?: AgentTool[]
-  initialMessages?: AgentMessage[]
+  modelOptions?: Record<string, unknown>
+  tools?: readonly AgentTool[]
+  initialMessages?: readonly AgentMessage[]
   toolPolicies?: Record<string, ToolPolicy>
   hooks?: Partial<AgentRuntimeHooks>
-  plugins?: AgentPlugin[]
+  plugins?: readonly AgentRuntimePlugin[]  // use structural typing; not re-exported by @cline/sdk
+  logger?: BasicLogger
+  telemetry?: ITelemetryService
+  maxIterations?: number
+  toolExecution?: "sequential" | "parallel"
+  requestToolApproval?: (request: ToolApprovalRequest) => Promise<ToolApprovalResult> | ToolApprovalResult
 }
 ```
 
 Note: there is no top-level `onEvent` field on `AgentRuntimeConfig`. For event streaming, use `agent.subscribe()` or `hooks.onEvent` (see AgentRuntimeHooks below).
+
+Direct Agent runtime plugins are not the same as ClineCore `AgentPlugin` extensions. A runtime plugin has `name` and optional `setup(context)` returning `{ tools, hooks }`. Use ClineCore `AgentPlugin` objects only with `config.extensions`.
+
+### Advanced AgentRuntimeConfig Fields
+
+```typescript
+interface AgentRuntimeConfig {
+  sessionId?: string
+  agentId?: string
+  conversationId?: string
+  parentAgentId?: string | null
+  agentRole?: string
+  messageModelInfo?: AgentMessage["modelInfo"]
+  completionPolicy?: {
+    requireCompletionTool?: boolean
+    completionGuard?: () => string | undefined
+  }
+  toolContextMetadata?: Record<string, unknown>
+  prepareTurn?: (context: AgentRuntimePrepareTurnContext) =>
+    AgentRuntimePrepareTurnResult | undefined | Promise<AgentRuntimePrepareTurnResult | undefined>
+  consumePendingUserMessage?: () => string | undefined | Promise<string | undefined>
+}
+```
+
+Use the identity fields when embedding `Agent` inside a larger host that needs stable session, conversation, or parent-agent routing. Use `requestToolApproval` with `toolPolicies` entries that set `autoApprove: false`; without that callback, approval-required tools are blocked and return an error tool result.
 
 ## Methods
 
@@ -89,6 +128,8 @@ agent.abort("User cancelled")
 Register a listener for streaming events.
 
 ```typescript
+import type { AgentRuntimeEvent } from "@cline/agents"
+
 const unsubscribe = agent.subscribe((event: AgentRuntimeEvent) => {
   // handle event
 })
@@ -102,6 +143,8 @@ unsubscribe()
 Get the current runtime state including message history.
 
 ```typescript
+import type { AgentRuntimeStateSnapshot } from "@cline/agents"
+
 const state: AgentRuntimeStateSnapshot = agent.snapshot()
 ```
 
@@ -113,17 +156,7 @@ Replace the agent's message history.
 agent.restore(previousMessages)
 ```
 
-### hasRun
-
-Boolean property indicating whether `run()` has been called at least once.
-
-```typescript
-if (agent.hasRun) {
-  await agent.continue(input)
-} else {
-  await agent.run(input)
-}
-```
+There is no `hasRun` property. `run()` and `continue()` both execute against the current in-memory message history. Track first-run state in your app when that distinction matters.
 
 ## AgentRunResult
 
@@ -162,8 +195,8 @@ interface AgentMessage {
   metrics?: {
     inputTokens: number
     outputTokens: number
-    cacheReadTokens?: number
-    cacheWriteTokens?: number
+    cacheReadTokens: number
+    cacheWriteTokens: number
     cost?: number
   }
 }
@@ -177,8 +210,6 @@ interface AgentUsage {
   outputTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
-  totalInputTokens: number
-  totalOutputTokens: number
   totalCost?: number
 }
 ```
@@ -205,10 +236,17 @@ Hooks can intercept and modify behavior at each stage. Return a stop control fro
 
 ```typescript
 interface AgentRuntimeStateSnapshot {
+  agentId: string
+  agentRole?: string
+  parentAgentId?: string | null
+  conversationId?: string
+  runId?: string
+  status: "idle" | "running" | "completed" | "aborted" | "failed"
+  iteration: number
   messages: readonly AgentMessage[]
+  pendingToolCalls: readonly string[]
   usage: AgentUsage
-  iterations: number
-  status: string
+  lastError?: string
 }
 ```
 

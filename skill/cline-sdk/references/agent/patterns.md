@@ -8,6 +8,8 @@ A multi-turn conversational agent in the terminal with streaming output:
 import { Agent } from "@cline/sdk"
 import * as readline from "node:readline"
 
+let hasRun = false
+
 const agent = new Agent({
   providerId: "anthropic",
   modelId: "claude-sonnet-4-6",
@@ -37,10 +39,11 @@ function prompt(): void {
 
     process.stdout.write("\nAssistant: ")
 
-    if (agent.hasRun) {
+    if (hasRun) {
       await agent.continue(trimmed)
     } else {
       await agent.run(trimmed)
+      hasRun = true
     }
 
     process.stdout.write("\n")
@@ -59,6 +62,7 @@ Maintain per-thread agents with conversation memory:
 import { Agent } from "@cline/sdk"
 
 const agents = new Map<string, Agent>()
+const hasRunByThread = new Set<string>()
 
 async function handleMessage(threadId: string, message: string) {
   let agent = agents.get(threadId)
@@ -72,9 +76,10 @@ async function handleMessage(threadId: string, message: string) {
     agents.set(threadId, agent)
   }
 
-  const result = agent.hasRun
+  const result = hasRunByThread.has(threadId)
     ? await agent.continue(message)
     : await agent.run(message)
+  hasRunByThread.add(threadId)
 
   return result.outputText
 }
@@ -148,8 +153,11 @@ const agent = new Agent({
 })
 
 const result = await agent.run(diffContent)
-const review = result.toolCalls.find(tc => tc.name === "submit_review")
-console.log(review?.output)
+const toolResults = result.messages
+  .flatMap(message => message.content)
+  .filter(part => part.type === "tool-result" && part.toolName === "submit_review")
+const review = toolResults.at(-1)?.output
+console.log(review)
 ```
 
 ## Agent with Abort/Timeout
@@ -180,18 +188,19 @@ try {
 
 ```typescript
 import { Agent } from "@cline/sdk"
-import type { AgentPlugin } from "@cline/sdk"
 
-const loggingPlugin: AgentPlugin = {
+const loggingPlugin = {
   name: "logging",
-  manifest: { capabilities: ["hooks"] },
-  setup() {},
-  hooks: {
-    beforeTool({ toolCall }) {
-      console.log(`Calling tool: ${toolCall.toolName}`)
-    },
-    afterRun({ result }) {
-      console.log(`Completed in ${result.iterations} iterations`)
+  setup() {
+    return {
+      hooks: {
+        beforeTool({ toolCall }) {
+          console.log(`Calling tool: ${toolCall.toolName}`)
+        },
+        afterRun({ result }) {
+          console.log(`Completed in ${result.iterations} iterations`)
+        },
+      },
     },
   },
 }
@@ -229,12 +238,12 @@ For advanced provider configuration:
 
 ```typescript
 import { Agent } from "@cline/sdk"
-import { createGateway } from "@cline/llms"
+import { Llms } from "@cline/sdk"
 
-const gateway = createGateway({
+const gateway = Llms.createGateway({
   providerConfigs: [
     { providerId: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY },
-    { providerId: "openai", apiKey: process.env.OPENAI_API_KEY },
+    { providerId: "openai-native", apiKey: process.env.OPENAI_API_KEY },
   ],
 })
 

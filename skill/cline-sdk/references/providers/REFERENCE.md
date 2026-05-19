@@ -1,18 +1,25 @@
 # Model Providers
 
-The Cline SDK supports every major LLM provider out of the box via `@cline/llms`.
+The Cline SDK provider layer lives in `@cline/llms`. The `@cline/sdk` package re-exports it as the `Llms` namespace through `@cline/core`.
 
 ## Supported Providers
 
 | Provider ID | Models |
 |-------------|--------|
 | `"anthropic"` | Claude Opus 4.7, Sonnet 4.6, Haiku 4.5 |
-| `"openai"` | GPT-5.5, GPT-5.3 Codex |
-| `"gemini"` | Gemini 3.1 Pro Preview, Gemini 3 Flash Preview |
-| `"vertex"` | Google models via Vertex AI |
-| `"bedrock"` | Claude, Llama via AWS Bedrock |
-| `"mistral"` | Mistral Large, Codestral |
-| `"openai-compatible"` | vLLM, Together, Fireworks, Groq, etc. |
+| `"openai-native"` | OpenAI API models |
+| `"openai-codex"` | OpenAI ChatGPT subscription models through OAuth |
+| `"openai-codex-cli"` | Local Codex CLI provider |
+| `"gemini"` | Google Gemini API models |
+| `"vertex"` | Google Vertex AI models |
+| `"bedrock"` | AWS Bedrock models |
+| `"mistral"` | Mistral models |
+| `"openai-compatible"` | Generic OpenAI-compatible endpoint |
+| `"openrouter"`, `"cline"`, `"deepseek"`, `"xai"`, `"together"`, `"fireworks"`, `"groq"`, `"cerebras"`, `"sambanova"`, `"nebius"`, `"baseten"`, `"requesty"`, `"litellm"`, `"ollama"`, `"lmstudio"` | Common built-in compatible provider presets |
+| `"huggingface"`, `"vercel-ai-gateway"`, `"v0"`, `"aihubmix"`, `"hicap"`, `"nousResearch"`, `"huawei-cloud-maas"`, `"qwen"`, `"qwen-code"`, `"doubao"`, `"zai"`, `"zai-coding-plan"`, `"moonshot"`, `"wandb"`, `"xiaomi"`, `"kilo"`, `"asksage"`, `"minimax"` | Additional built-in compatible provider presets |
+| `"claude-code"`, `"opencode"`, `"dify"`, `"oca"`, `"sapaicore"` | Additional built-in provider families and integrations |
+
+Provider and model catalogs change over time. Prefer `Llms.getProviderIds()`, `Llms.getProvider(id)`, and `Llms.getModelsForProvider(id)` over hardcoding lists in generated code.
 
 ## Basic Configuration
 
@@ -43,6 +50,11 @@ await cline.start({
     providerId: "anthropic",
     modelId: "claude-sonnet-4-6",
     apiKey: process.env.ANTHROPIC_API_KEY,
+    cwd: process.cwd(),
+    systemPrompt: "You are a helpful assistant.",
+    enableTools: false,
+    enableSpawnAgent: false,
+    enableAgentTeams: false,
   },
 })
 ```
@@ -63,8 +75,8 @@ await cline.start({
 
 ```typescript
 {
-  providerId: "openai",
-  modelId: "gpt-5.5",
+  providerId: "openai-native",
+  modelId: "gpt-5.4",
   apiKey: process.env.OPENAI_API_KEY,
 }
 ```
@@ -144,8 +156,8 @@ Pass additional headers to API requests:
 
 ```typescript
 {
-  providerId: "openai",
-  modelId: "gpt-5.5",
+  providerId: "openai-native",
+  modelId: "gpt-5.4",
   apiKey: process.env.API_KEY,
   headers: {
     "X-Custom-Header": "value",
@@ -158,12 +170,12 @@ Pass additional headers to API requests:
 For advanced multi-provider setups, use the Gateway directly:
 
 ```typescript
-import { createGateway, DefaultGateway } from "@cline/llms"
+import { Agent, Llms } from "@cline/sdk"
 
-const gateway = createGateway({
+const gateway = Llms.createGateway({
   providerConfigs: [
     { providerId: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY },
-    { providerId: "openai", apiKey: process.env.OPENAI_API_KEY },
+    { providerId: "openai-native", apiKey: process.env.OPENAI_API_KEY },
   ],
 })
 
@@ -193,27 +205,30 @@ gateway.stream(request)                  // raw streaming (AsyncIterable)
 Query and register providers programmatically:
 
 ```typescript
-import {
-  getAllProviders,
-  getProviderIds,
-  getProvider,
-  getModelsForProvider,
-  registerProvider,
-  registerModel,
-  createHandler,
-} from "@cline/llms"
+import { Llms } from "@cline/sdk"
 
 // List all registered providers
-const providers = getAllProviders()
+const providers = await Llms.getAllProviders()
 
 // Get models for a provider
-const models = getModelsForProvider("anthropic")
+const models = await Llms.getModelsForProvider("anthropic")
 
-// Register a custom provider
-registerProvider({
-  id: "my-provider",
-  name: "My Custom Provider",
-  handler: createHandler({ ... }),
+// Register a custom provider in the model catalog
+Llms.registerProvider({
+  provider: {
+    id: "my-provider",
+    name: "My Custom Provider",
+    defaultModelId: "my-model",
+    client: "custom",
+    source: "file",
+  },
+  models: {
+    "my-model": {
+      id: "my-model",
+      name: "My Model",
+      contextWindow: 128000,
+    },
+  },
 })
 ```
 
@@ -222,11 +237,11 @@ registerProvider({
 Access model info (context window, pricing, capabilities):
 
 ```typescript
-import { getModelsForProvider } from "@cline/llms"
+import { Llms } from "@cline/sdk"
 
-const models = getModelsForProvider("anthropic")
-for (const model of models) {
-  console.log(`${model.id}: context=${model.contextWindow}, input=$${model.inputPrice}/MTok`)
+const models = await Llms.getModelsForProvider("anthropic")
+for (const [modelId, model] of Object.entries(models)) {
+  console.log(`${modelId}: context=${model.contextWindow}, input=$${model.pricing?.input}/MTok`)
 }
 ```
 

@@ -1,13 +1,13 @@
 # ClineCore Runtime
 
-`ClineCore` is the full-featured runtime from `@cline/core`. It wraps the `Agent` loop with session persistence, built-in tools (`run_commands`, `editor`, `read_files`, `search_codebase`, `fetch_web_content`), config discovery, plugin loading, and optional hub-backed multi-process support.
+`ClineCore` is the full-featured runtime from `@cline/core`, re-exported by `@cline/sdk`. It wraps the `Agent` loop with session persistence, built-in tools (`run_commands`, `editor`, `read_files`, `search_codebase`, `fetch_web_content`), config discovery, plugin loading, automation, and optional hub-backed multi-process support.
 
 ## When to Use ClineCore
 
 | Use ClineCore when... | Use Agent instead when... |
 |---|---|
 | You need built-in tools (`run_commands`, `editor`, etc.) | You only need custom tools |
-| You want session persistence to disk | Stateless is fine |
+| You want session persistence to disk | No disk persistence is fine |
 | You need config discovery from `.cline/` dirs | You handle config yourself |
 | You want scheduled/automated agents | You don't need scheduling |
 | You need multi-client session sharing | Single-process is fine |
@@ -27,7 +27,10 @@ const session = await cline.start({
     modelId: "claude-sonnet-4-6",
     apiKey: process.env.ANTHROPIC_API_KEY,
     cwd: "/path/to/project",
+    systemPrompt: "You are a helpful coding agent.",
     enableTools: true,
+    enableSpawnAgent: false,
+    enableAgentTeams: false,
   },
 })
 
@@ -43,7 +46,7 @@ Every `cline.start()` call creates a session with a unique ID. Sessions persist 
 
 ### Built-in Tools
 
-ClineCore provides these tools automatically when `enableTools: true`:
+ClineCore provides the default tool suite when `enableTools: true`. The exact enabled set depends on mode, tool routing, available configured skills, MCP settings, and policies:
 
 | Tool | Description |
 |------|-------------|
@@ -53,6 +56,9 @@ ClineCore provides these tools automatically when `enableTools: true`:
 | `apply_patch` | Apply unified diffs |
 | `search_codebase` | Search file contents and structure |
 | `fetch_web_content` | HTTP requests and web content |
+| `skills` | Invoke configured skills |
+| `ask_question` | Ask a follow-up question through the host |
+| `submit_and_exit` | Submit final answer and end the session |
 
 ### Config Discovery
 
@@ -82,11 +88,18 @@ The default mode is `"auto"`. For simple scripts and CLI tools, `"local"` avoids
 - `cline.send({ sessionId, prompt })` - Send follow-up message
 - `cline.subscribe(listener)` - Listen to session events
 - `cline.list()` - List sessions
+- `cline.listHistory(options)` - List sessions with history filters
 - `cline.get(sessionId)` - Get session metadata
 - `cline.readMessages(sessionId)` - Read persisted messages
 - `cline.getAccumulatedUsage(sessionId)` - Token/cost totals
+- `cline.pendingPrompts.list/update/delete(...)` - Inspect or steer queued prompts for active interactive sessions
+- `cline.updateSessionModel(sessionId, modelId)` - Switch model for an active session
 - `cline.abort(sessionId)` - Abort a session
+- `cline.stop(sessionId)` - Stop a session
+- `cline.restore(input)` - Restore a checkpoint
 - `cline.delete(sessionId)` - Delete a session
+- `cline.settings.list/toggle(...)` - Inspect or toggle tools, plugins, MCP, skills, rules, and workflows
+- `cline.automation.*` - Manage automation when enabled
 - `cline.dispose()` - Clean up resources
 
 See `api.md` for full API details.
@@ -122,8 +135,9 @@ Sessions are stored at:
 ```
 ~/.cline/data/sessions/
   sessions.db       # SQLite database
-  [session-id].json # Message history
 ```
+
+The exact artifact paths are returned from `cline.start()` as `manifestPath` and `messagesPath`. Use those returned paths instead of assuming a filename.
 
 ## Next Steps
 
