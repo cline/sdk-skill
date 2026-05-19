@@ -29,13 +29,17 @@ const cline = await ClineCore.create({ clientName: "my-app" })
 
 cline.subscribe((event) => {
   switch (event.type) {
-    case "chunk":
-      if (event.payload.type === "text") {
-        ui.appendText(event.payload.text)
+    case "agent_event":
+      if (
+        event.payload.event.type === "content_start" &&
+        event.payload.event.contentType === "text" &&
+        event.payload.event.text
+      ) {
+        ui.appendText(event.payload.event.text)
       }
       break
     case "ended":
-      ui.showComplete(event.payload.finishReason)
+      ui.showComplete(event.payload.reason)
       break
   }
 })
@@ -85,9 +89,9 @@ const cline = await ClineCore.create({
   clientName: "my-app",
   toolPolicies: {
     read_files: { autoApprove: true },
-    search: { autoApprove: true },
-    fetch_web: { autoApprove: true },
-    bash: { autoApprove: false },
+    search_codebase: { autoApprove: true },
+    fetch_web_content: { autoApprove: true },
+    run_commands: { autoApprove: false },
     editor: { autoApprove: false },
     apply_patch: { autoApprove: false },
   },
@@ -129,7 +133,7 @@ await cline.start({
     modelId: "claude-sonnet-4-6",
     cwd: process.cwd(),
     enableTools: true,
-    tools: [deployTool],
+    extraTools: [deployTool],
   },
 })
 ```
