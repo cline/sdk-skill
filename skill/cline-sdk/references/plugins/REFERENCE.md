@@ -11,10 +11,14 @@ A plugin can:
 
 A plugin ships in one of two shapes:
 
-1. Single-file plugin -- one `.ts` file that exports a default plugin object. Drop it in a discovery folder and it loads.
+1. Single-file plugin -- one `.ts` file that exports a default plugin object. Drop it in a discovery folder and it loads. Can only import Node builtins (`node:fs`, etc.) and host-provided `@cline/*` packages. No npm dependencies.
 2. Plugin package -- a directory with `package.json`, npm dependencies, and optionally bundled assets. Installable via `cline plugin install`.
 
 Both shapes use the same ClineCore plugin API.
+
+### Which Shape Do I Need?
+
+The dividing line is npm dependencies. If your plugin only uses Node builtins and `@cline/*`, ship a single file. The moment you reach for `zod`, `yaml`, `axios`, an internal SDK client, or any other third-party package, you need the package shape. There is no middle ground -- a single `.ts` file with `import { z } from "zod"` fails at load with `Cannot find module 'zod'` because the plugin loader walks up from the plugin file looking for `node_modules/<package>` and there is nowhere for those deps to live next to a bare file.
 
 Direct `Agent` has a different, smaller runtime plugin shape: `plugins` entries can return `{ tools, hooks }` from `setup(context)`, but they do not use `manifest` or `setup(api, ctx)`. Use the `AgentPlugin` examples in this file with ClineCore `extensions` or `pluginPaths`, not with direct `Agent.plugins`.
 
@@ -491,6 +495,47 @@ Key fields:
 - `type: "module"` -- required. Cline plugins are ES modules.
 - `cline.plugins` -- the discovery contract. Array of entries with `paths` pointing at entry files. The exported plugin object's own `manifest.capabilities` is still the runtime source of truth.
 - `peerDependencies` for the `@cline/*` package your plugin imports -- the host already provides it. Marking it optional lets you typecheck in isolation.
+- `dependencies` -- any npm package your plugin imports at runtime. These get installed into `node_modules` adjacent to your entry file, and the plugin loader walks up from the entry to resolve them.
+
+### Local Dev Loop
+
+You don't have to `cline plugin install` on every edit. Two iteration patterns:
+
+```bash
+# 1. Install your deps once
+cd my-cline-plugin
+npm install
+```
+
+Then point the SDK at the directory directly:
+
+```typescript
+await host.start({
+  config: {
+    // ...provider/model
+    pluginPaths: ["./my-cline-plugin"],
+  },
+  prompt: "...",
+})
+```
+
+`pluginPaths` accepts either an entry file or a package directory (`resolveConfiguredPluginModulePaths` in `@cline/shared/storage`). When it gets a directory it reads `package.json`, follows the `cline.plugins` paths, and loads each entry. Edit `index.ts`, restart, repeat -- no install step.
+
+`cline plugin install` is the right tool for distribution, not for iteration. See "Distributing" below.
+
+### Distributing
+
+`cline plugin install <source>` handles the whole pipeline for recipients: it stages your plugin into `~/.cline/plugins/_installed/<source-type>/`, strips host-provided `@cline/*` deps from `package.json`, runs `npm install --omit=dev --omit=peer` inside the install path, and writes a wrapper manifest that points at your entry file. The end user never runs `npm install` themselves.
+
+Three distribution channels, same install command:
+
+```bash
+cline plugin install --git github.com/your-org/my-cline-plugin
+cline plugin install npm:@your-org/my-cline-plugin
+cline plugin install /local/path/to/my-cline-plugin
+```
+
+Local installs copy the directory (skipping `.git` and `node_modules`) and then run `npm install` in the copy, so your local dev `node_modules` is not what runs in production.
 
 ### Bundling Assets
 
@@ -601,6 +646,7 @@ If the plugin fails validation or setup, the CLI prints a clear error and contin
 - Sandboxed plugins and `telemetry` -- telemetry is process-local. Feature-detect `ctx.telemetry` and expect it to be undefined in sandboxed plugin processes.
 - Resolving bundled assets -- use `import.meta.url` + `fileURLToPath` to find files inside your package; never `process.cwd()`. For workspace paths, do the opposite: use `ctx.workspaceInfo?.rootPath`, never `import.meta.url`.
 - Plugin name collisions -- `name` must be unique within a session. If two plugins share a name, validation fails. Namespace by package (`my-org-redactor`, not `redactor`).
+- `Cannot find module 'xxx'` from a single-file plugin -- you reached for an npm dep from a `.ts` dropped in `.cline/plugins/`. Single-file plugins can only import Node builtins and `@cline/*`. Convert to a package: make a directory, add `package.json` with `dependencies`, `npm install`, then point `pluginPaths` at the directory (or `cline plugin install` it).
 
 ## Decision Guide -- Which Extension Point?
 
